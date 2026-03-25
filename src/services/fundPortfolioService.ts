@@ -4,6 +4,7 @@
  */
 
 import axios from 'axios'
+import { fetchStockDataMultiSource, getFundPortfolioStocks } from './freeStockService'
 
 // 基金持仓数据接口
 const FUND_PORTFOLIO_API = {
@@ -113,7 +114,7 @@ interface FundPortfolioValuation {
 }
 
 /**
- * 从新浪财经API获取股票实时数据（通过代理服务器）
+ * 获取股票实时数据（使用免费多源API）
  */
 async function fetchStockRealTimeData(symbols: string[]): Promise<StockRealTimeData[]> {
   if (symbols.length === 0) return []
@@ -121,34 +122,18 @@ async function fetchStockRealTimeData(symbols: string[]): Promise<StockRealTimeD
   try {
     console.log(`📈 获取 ${symbols.length} 只股票实时数据: ${symbols.join(',')}`)
     
-    // 首先尝试使用代理服务器
-    try {
-      const proxyUrl = `${PROXY_BASE_URL}/api/stock/${symbols.join(',')}`
-      
-      const response = await axios.get(proxyUrl, {
-        timeout: 10000,
-        responseType: 'text'
-      })
-      
-      const data = response.data
-      return parseSinaStockData(data, symbols)
-      
-    } catch (proxyError) {
-      console.warn('⚠️ 代理服务器获取股票数据失败，尝试直接请求:', proxyError.message)
-      
-      // 降级：尝试直接请求（可能遇到CORS问题）
-      const response = await axios.get(FUND_PORTFOLIO_API.stockRealTime(symbols), {
-        timeout: 8000,
-        headers: {
-          'Referer': 'https://finance.sina.com.cn/',
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-        },
-        responseType: 'text'
-      })
-      
-      const data = response.data
-      return parseSinaStockData(data, symbols)
-    }
+    // 使用免费多源API服务
+    const stockData = await fetchStockDataMultiSource(symbols)
+    
+    // 转换为内部格式
+    return stockData.map(stock => ({
+      symbol: stock.symbol,
+      name: stock.name,
+      currentPrice: stock.currentPrice,
+      changePercent: stock.changePercent,
+      changeAmount: stock.changeAmount,
+      timestamp: stock.timestamp
+    }))
     
   } catch (error) {
     console.error('❌ 获取股票实时数据失败:', error)
