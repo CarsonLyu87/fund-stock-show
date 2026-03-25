@@ -26,10 +26,7 @@ export const getMarketStatus = () => {
   }
 }
 
-// 获取最后更新时间
-export const getLastUpdateTime = (): number => {
-  return Date.now()
-}
+
 
 // 获取基金数据 - 使用真实数据服务
 export const fetchFundData = async (): Promise<Fund[]> => {
