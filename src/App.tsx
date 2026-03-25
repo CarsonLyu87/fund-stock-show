@@ -2,11 +2,9 @@ import { useState, useEffect } from 'react'
 import { Layout, Card, Row, Col, Statistic, Alert, Spin, Tag, Button } from 'antd'
 import { ArrowUpOutlined, ArrowDownOutlined, ReloadOutlined } from '@ant-design/icons'
 import './App.css'
-import EnhancedFundTable from './components/EnhancedFundTable'
+import UnifiedFundManager from './components/UnifiedFundManager'
 import StockChart from './components/StockChart'
-import SearchBar from './components/SearchBar'
 import DataAccuracyInfo from './components/DataAccuracyInfo'
-import FundSearchAdd from './components/FundSearchAdd'
 import type { Fund, StockData } from './types/index'
 import { fetchFundData, fetchStockData, initDataService, getMarketStatus, getFormattedLastUpdateTime } from './utils/api'
 
@@ -244,23 +242,6 @@ function App() {
           </Col>
         </Row>
 
-        {/* 基金搜索与添加 */}
-        <div style={{ marginBottom: 16 }}>
-          <FundSearchAdd 
-            onFundsUpdated={loadData}
-            onFundAdded={(fundCode) => {
-              console.log(`基金 ${fundCode} 已添加，重新加载数据`)
-              // 重新加载数据以显示新添加的基金
-              setTimeout(() => loadData(), 500)
-            }}
-            onFundRemoved={(fundCode) => {
-              console.log(`基金 ${fundCode} 已移除，重新加载数据`)
-              // 重新加载数据以更新列表
-              setTimeout(() => loadData(), 500)
-            }}
-          />
-        </div>
-
         {loading ? (
           <div style={{ textAlign: 'center', padding: '50px' }}>
             <Spin size="large" tip="加载实时数据中..." />
@@ -270,29 +251,9 @@ function App() {
             {/* 数据准确性说明 */}
             <DataAccuracyInfo showDetails={false} />
             
-            {/* 基金表格 */}
+            {/* 统一的基金监控与管理 */}
             <div style={{ marginBottom: 24 }}>
-              <Card 
-                title={`💰 基金列表 (${funds.length})`}
-                extra={
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 12, color: '#666' }}>
-                      最后更新: {lastUpdate || '--:--:--'}
-                    </span>
-                    <Button 
-                      type="text" 
-                      icon={<ReloadOutlined />} 
-                      onClick={loadData}
-                      loading={loading}
-                      size="small"
-                    >
-                      刷新
-                    </Button>
-                  </div>
-                }
-              >
-                <EnhancedFundTable funds={funds} loading={loading} />
-              </Card>
+              <UnifiedFundManager onDataReload={loadData} />
             </div>
 
             {/* 股票图表 */}
