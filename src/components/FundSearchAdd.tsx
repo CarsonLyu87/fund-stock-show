@@ -46,18 +46,28 @@ const FundSearchAdd: React.FC<FundSearchAddProps> = ({
 
   // 处理搜索
   const handleSearch = async () => {
-    if (!searchQuery.trim()) {
-      message.warning('请输入搜索关键词')
+    const query = searchQuery.trim()
+    
+    if (!query) {
+      message.warning('请输入基金代码')
+      return
+    }
+
+    // 验证基金代码格式（6位数字）
+    if (!/^\d{6}$/.test(query)) {
+      message.warning('请输入6位数字基金代码')
       return
     }
 
     setLoading(true)
     try {
-      const results = await searchFunds(searchQuery)
+      const results = await searchFunds(query)
       setSearchResults(results)
       
       if (results.length === 0) {
-        message.info('未找到相关基金')
+        message.info(`未找到基金代码 ${query}`)
+      } else {
+        message.success(`找到基金: ${results[0].name}`)
       }
     } catch (error) {
       message.error('搜索失败，请稍后重试')
@@ -342,9 +352,9 @@ const FundSearchAdd: React.FC<FundSearchAddProps> = ({
       {/* 搜索框 */}
       <Space.Compact style={{ width: '100%', marginBottom: 16 }}>
         <Input
-          placeholder="输入基金代码、名称或公司..."
+          placeholder="输入6位基金代码，如：005827"
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={(e) => setSearchQuery(e.target.value.replace(/\D/g, '').slice(0, 6))}
           onPressEnter={handleSearch}
           size="large"
           allowClear
@@ -359,6 +369,35 @@ const FundSearchAdd: React.FC<FundSearchAddProps> = ({
           搜索
         </Button>
       </Space.Compact>
+
+      {/* 热门基金快捷选择 */}
+      <div style={{ marginBottom: 16 }}>
+        <Text strong style={{ marginRight: 12 }}>热门基金:</Text>
+        <Space wrap>
+          {[
+            { code: '005827', name: '易方达蓝筹' },
+            { code: '161725', name: '招商白酒' },
+            { code: '003095', name: '中欧医疗' },
+            { code: '110022', name: '易方达消费' },
+            { code: '519674', name: '银河创新' },
+            { code: '260108', name: '景顺长城' },
+            { code: '000404', name: '易方达新兴' },
+            { code: '001714', name: '工银文体' }
+          ].map(fund => (
+            <Button
+              key={fund.code}
+              size="small"
+              type="dashed"
+              onClick={() => {
+                setSearchQuery(fund.code)
+                setTimeout(() => handleSearch(), 100)
+              }}
+            >
+              {fund.code} ({fund.name})
+            </Button>
+          ))}
+        </Space>
+      </div>
 
       {/* 用户基金统计 */}
       <Alert
@@ -409,9 +448,9 @@ const FundSearchAdd: React.FC<FundSearchAddProps> = ({
         <Empty
           description={
             <div>
-              <div>未找到相关基金</div>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                请尝试其他关键词，如：易方达、白酒、医疗等
+              <div>未找到基金代码 {searchQuery}</div>
+              <Text type="secondary" style={{ fontSize: 12, marginTop: 8 }}>
+                请确认基金代码是否正确，或尝试热门基金代码
               </Text>
             </div>
           }
@@ -419,7 +458,14 @@ const FundSearchAdd: React.FC<FundSearchAddProps> = ({
         />
       ) : (
         <Empty
-          description="输入关键词搜索基金"
+          description={
+            <div>
+              <div>输入6位基金代码搜索</div>
+              <Text type="secondary" style={{ fontSize: 12, marginTop: 8 }}>
+                示例：005827 (易方达蓝筹精选混合)
+              </Text>
+            </div>
+          }
           style={{ padding: '40px 0' }}
         />
       )}

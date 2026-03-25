@@ -71,22 +71,42 @@ const STORAGE_KEYS = {
 }
 
 /**
- * 搜索基金
+ * 按基金代码搜索基金
  */
 export async function searchFunds(keyword: string): Promise<FundSearchResult[]> {
   if (!keyword.trim()) {
     return []
   }
   
-  console.log(`🔍 搜索基金: ${keyword}`)
+  console.log(`🔍 按代码搜索基金: ${keyword}`)
   
   try {
     // 获取用户已添加的基金列表
     const userFunds = getUserFunds()
     const userFundCodes = new Set(userFunds.map(fund => fund.code))
     
-    // 使用东方财富搜索API
-    const url = FUND_SEARCH_APIS.eastmoneySearch(keyword)
+    // 清理输入：移除空格，只保留数字
+    const cleanCode = keyword.trim().replace(/\s+/g, '')
+    
+    // 如果是6位数字代码，直接获取基金详情
+    if (/^\d{6}$/.test(cleanCode)) {
+      console.log(`📊 按基金代码 ${cleanCode} 获取详情`)
+      const fundDetail = await getFundDetail(cleanCode)
+      
+      if (fundDetail) {
+        // 保存搜索历史
+        saveSearchHistory(cleanCode)
+        
+        return [{
+          ...fundDetail,
+          isAdded: userFundCodes.has(cleanCode)
+        }]
+      }
+    }
+    
+    // 如果直接获取详情失败，尝试搜索API
+    console.log(`🔍 尝试搜索基金: ${cleanCode}`)
+    const url = FUND_SEARCH_APIS.eastmoneySearch(cleanCode)
     
     const response = await axios.get(url, {
       timeout: 8000,
@@ -96,7 +116,7 @@ export async function searchFunds(keyword: string): Promise<FundSearchResult[]> 
     const results = parseSearchResults(response.data, userFundCodes)
     
     // 保存搜索历史
-    saveSearchHistory(keyword)
+    saveSearchHistory(cleanCode)
     
     return results
     
@@ -138,11 +158,49 @@ function parseSearchResults(data: any, userFundCodes: Set<string>): FundSearchRe
 }
 
 /**
- * 获取基金详情
+ * 获取基金详情（多源API）
  */
 export async function getFundDetail(code: string): Promise<FundSearchResult | null> {
+  if (!/^\d{6}$/.test(code)) {
+    console.error(`无效的基金代码: ${code}`)
+    return null
+  }
+  
+  console.log(`📊 获取基金 ${code} 详情...`)
+  
+  // 尝试的API顺序
+  const apiAttempts = [
+    { name: '代理服务器API', fetch: fetchFundDetailFromProxy },
+    { name: '天天基金API', fetch: fetchFundDetailFromTiantian },
+    { name: '东方财富API', fetch: fetchFundDetailFromEastmoney }
+  ]
+  
+  for (const attempt of apiAttempts) {
+    try {
+      console.log(`🔍 尝试 ${attempt.name}...`)
+      const fundDetail = await attempt.fetch(code)
+      
+      if (fundDetail) {
+        console.log(`✅ ${attempt.name} 成功获取基金 ${code} 详情`)
+        return fundDetail
+      }
+    } catch (error) {
+      console.warn(`⚠️ ${attempt.name} 失败:`, error.message)
+    }
+    
+    // 避免请求过快
+    await new Promise(resolve => setTimeout(resolve, 300))
+  }
+  
+  console.error(`❌ 所有API都无法获取基金 ${code} 详情`)
+  return null
+}
+
+/**
+ * 通过代理服务器获取基金详情
+ */
+async function fetchFundDetailFromProxy(code: string): Promise<FundSearchResult | null> {
   try {
-    // 尝试通过代理服务器获取基金详情
     const proxyUrl = `${PROXY_BASE_URL}/api/fund/estimate/${code}`
     
     const response = await axios.get(proxyUrl, {
@@ -165,7 +223,112 @@ export async function getFundDetail(code: string): Promise<FundSearchResult | nu
     }
     
   } catch (error) {
-    console.error('获取基金详情失败:', error)
+    throw new Error(`代理服务器API失败: ${error.message}`)
+  }
+  
+  return null
+}
+
+/**
+ * 通过天天基金API获取基金详情
+ */
+async function fetchFundDetailFromTiantian(code: string): Promise<FundSearchResult | null> {
+  try {
+    const url = `https://fundgz.1234567.com.cn/js/${code}.js?rt=${Date.now()}`
+    
+    const response = await axios.get(url, {
+      timeout: 5000,
+      headers: {
+        'Referer': 'https://fund.eastmoney.com/',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+      },
+      responseType: 'text'
+    })
+    
+    // 解析JSONP格式
+    const jsonStr = response.data.replace(/^jsonpgz\(/, '').replace(/\);$/, '')
+    const data = JSON.parse(jsonStr)
+    
+    if (data && data.fundcode) {
+      const userFunds = getUserFunds()
+      const isAdded = userFunds.some(fund => fund.code === code)
+      
+      return {
+        code: data.fundcode,
+        name: data.name,
+        type: '基金',
+        company: '基金公司',
+        netValue: data.dwjz ? parseFloat(data.dwjz) : undefined,
+        changePercent: data.gszzl ? parseFloat(data.gszzl) : undefined,
+        isAdded
+      }
+    }
+    
+  } catch (error) {
+    throw new Error(`天天基金API失败: ${error.message}`)
+  }
+  
+  return null
+}
+
+/**
+ * 通过东方财富API获取基金详情
+ */
+async function fetchFundDetailFromEastmoney(code: string): Promise<FundSearchResult | null> {
+  try {
+    // 东方财富基金详情API
+    const url = `https://api.fund.eastmoney.com/f10/lsjz?fundCode=${code}&pageIndex=1&pageSize=1`
+    
+    const response = await axios.get(url, {
+      timeout: 5000,
+      headers: {
+        'Referer': 'https://fund.eastmoney.com/',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+      }
+    })
+    
+    if (response.data && response.data.ErrCode === 0 && response.data.Data) {
+      const userFunds = getUserFunds()
+      const isAdded = userFunds.some(fund => fund.code === code)
+      
+      // 获取基金名称（需要另一个API）
+      let fundName = `基金${code}`
+      try {
+        const infoUrl = `https://fund.eastmoney.com/pingzhongdata/${code}.js?v=${Date.now()}`
+        const infoResponse = await axios.get(infoUrl, {
+          timeout: 3000,
+          headers: {
+            'Referer': 'https://fund.eastmoney.com/',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+          },
+          responseType: 'text'
+        })
+        
+        // 从JS文件中提取基金名称
+        const nameMatch = infoResponse.data.match(/fS_name\s*=\s*"([^"]+)"/)
+        if (nameMatch) {
+          fundName = nameMatch[1]
+        }
+      } catch (nameError) {
+        console.warn('获取基金名称失败:', nameError.message)
+      }
+      
+      const lsjzList = response.data.Data.LSJZList
+      const latestData = lsjzList && lsjzList[0]
+      
+      return {
+        code,
+        name: fundName,
+        type: '基金',
+        company: '基金公司',
+        netValue: latestData ? parseFloat(latestData.DWJZ) : undefined,
+        changePercent: latestData && latestData.JZZZL ? parseFloat(latestData.JZZZL) : undefined,
+        isAdded
+      }
+    }
+    
+  } catch (error) {
+    throw new Error(`东方财富API失败: ${error.message}`)
   }
   
   return null
