@@ -84,11 +84,18 @@ const NO_CORS_APIS = {
   },
   
   /**
-   * 公开的基金数据API（备用）
-   * 格式: https://api.jijinhao.com/fund/estimate/001714
+   * 东方财富基金净值API（支持JSONP）
+   * 格式: https://api.fund.eastmoney.com/f10/lsjz?fundCode=001714&pageIndex=1&pageSize=1&callback=jsonp
    */
-  publicFundApi: (code: string) => {
-    return `https://api.jijinhao.com/fund/estimate/${code}`
+  eastmoneyFundDetail: (code: string) => {
+    return `https://api.fund.eastmoney.com/f10/lsjz?fundCode=${code}&pageIndex=1&pageSize=1`
+  },
+  
+  /**
+   * 代理服务器API（备用）
+   */
+  proxyApi: (code: string) => {
+    return `${PROXY_BASE_URL}/api/fund/detail/${code}`
   }
 }
 
@@ -439,57 +446,86 @@ async function fetchFundDetailFromTiantian(code: string): Promise<FundSearchResu
  */
 async function fetchFundDetailFromPublicApi(code: string): Promise<FundSearchResult | null> {
   try {
-    // 尝试多个公开API
-    const publicApis = [
-      `https://api.jijinhao.com/fund/estimate/${code}`,
-      `https://fundapi.eastmoney.com/fund/api/fund/estimate/${code}`,
-      `https://api.fund.eastmoney.com/f10/lsjz?fundCode=${code}&pageIndex=1&pageSize=1`
+    // 优先使用无CORS限制的JSONP API
+    try {
+      const jsonpResult = await fetchFundDetailFromTiantianJsonp(code)
+      if (jsonpResult) {
+        return jsonpResult
+      }
+    } catch (jsonpError) {
+      console.log('JSONP API失败，尝试其他API:', jsonpError.message)
+    }
+    
+    // 备用API列表（无CORS限制或支持JSONP）
+    const backupApis = [
+      // 东方财富基金详情API（支持JSONP）
+      `https://api.fund.eastmoney.com/f10/lsjz?fundCode=${code}&pageIndex=1&pageSize=1&callback=jsonp`,
+      // 天天基金净值API（支持JSONP）
+      `https://fundgz.1234567.com.cn/js/${code}.js`,
+      // 备用：通过代理服务器访问
+      `${PROXY_BASE_URL}/api/fund/detail/${code}`
     ]
     
-    for (const apiUrl of publicApis) {
+    for (const apiUrl of backupApis) {
       try {
-        const response = await axios.get(apiUrl, {
-          timeout: 3000,
-          // 不设置Referer和User-Agent，避免被拒绝
-        })
+        console.log(`尝试API: ${apiUrl}`)
         
-        if (response.data) {
-          // 尝试解析不同API的响应格式
-          let fundData = response.data
+        // 如果是JSONP格式的URL
+        if (apiUrl.includes('.js') || apiUrl.includes('callback=')) {
+          // 使用JSONP获取数据
+          const jsonpData = await createJsonpPromise<any>(apiUrl)
           
-          // 如果是东方财富API
-          if (apiUrl.includes('api.fund.eastmoney.com')) {
-            if (fundData.ErrCode === 0 && fundData.Data && fundData.Data.LSJZList) {
-              const latestData = fundData.Data.LSJZList[0]
-              return {
-                code,
-                name: `基金${code}`,
-                type: '基金',
-                company: '基金公司',
-                netValue: latestData ? parseFloat(latestData.DWJZ) : undefined,
-                changePercent: latestData && latestData.JZZZL ? parseFloat(latestData.JZZZL) : undefined
-              }
+          if (jsonpData && (jsonpData.fundcode || jsonpData.code)) {
+            const userFunds = getUserFunds()
+            const isAdded = userFunds.some(fund => fund.code === code)
+            
+            return {
+              code: jsonpData.fundcode || jsonpData.code,
+              name: jsonpData.name || `基金${code}`,
+              type: '基金',
+              company: jsonpData.company || '基金公司',
+              netValue: jsonpData.dwjz ? parseFloat(jsonpData.dwjz) : undefined,
+              changePercent: jsonpData.gszzl ? parseFloat(jsonpData.gszzl) : undefined,
+              isAdded
             }
           }
-          // 如果是其他API格式
-          else if (fundData.code || fundData.fundcode) {
-            return {
-              code: fundData.code || fundData.fundcode,
-              name: fundData.name || `基金${code}`,
-              type: fundData.type || '基金',
-              company: fundData.company || '基金公司',
-              netValue: fundData.netValue || fundData.dwjz,
-              changePercent: fundData.changePercent || fundData.gszzl
+        } else {
+          // 普通HTTP请求
+          const response = await axios.get(apiUrl, {
+            timeout: 3000,
+            headers: {
+              'Referer': 'https://fund.eastmoney.com/',
+              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+            }
+          })
+          
+          if (response.data) {
+            const fundData = response.data
+            if (fundData.code || fundData.fundcode) {
+              const userFunds = getUserFunds()
+              const isAdded = userFunds.some(fund => fund.code === code)
+              
+              return {
+                code: fundData.code || fundData.fundcode,
+                name: fundData.name || `基金${code}`,
+                type: fundData.type || '基金',
+                company: fundData.company || '基金公司',
+                netValue: fundData.netValue || fundData.dwjz,
+                changePercent: fundData.changePercent || fundData.gszzl,
+                isAdded
+              }
             }
           }
         }
       } catch (apiError) {
+        console.log(`API ${apiUrl} 失败:`, apiError.message)
         // 继续尝试下一个API
         continue
       }
     }
     
   } catch (error) {
+    console.error('所有公开API都失败了:', error.message)
     throw new Error(`公开API失败: ${error.message}`)
   }
   
