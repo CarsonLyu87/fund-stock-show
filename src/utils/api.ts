@@ -1,9 +1,11 @@
 import axios from 'axios'
 import type { Fund, StockData } from '../types'
 import { fetchRealFundData, fetchRealStockData, initDataService, getUpdateInfo, clearCache } from '../services/realDataService'
+import { fetchAccurateFundData, getFundDetail, getDataSourceStatus, clearFundCache } from '../services/accurateFundService'
 
-// 重新导出真实数据服务函数
+// 重新导出数据服务函数
 export { initDataService, getUpdateInfo, clearCache }
+export { fetchAccurateFundData, getFundDetail, getDataSourceStatus, clearFundCache }
 
 // 获取市场状态
 export const getMarketStatus = () => {
@@ -28,16 +30,27 @@ export const getMarketStatus = () => {
 
 
 
-// 获取基金数据 - 使用真实数据服务
+// 获取基金数据 - 使用准确数据服务
 export const fetchFundData = async (): Promise<Fund[]> => {
-  console.log('获取基金数据（每15分钟更新）...')
+  console.log('获取基金数据（每15分钟更新，使用准确数据源）...')
   try {
-    const funds = await fetchRealFundData()
-    console.log(`成功获取 ${funds.length} 只基金数据`)
-    return funds
+    // 优先使用准确数据服务
+    const funds = await fetchAccurateFundData()
+    
+    if (funds.length > 0) {
+      console.log(`✅ 成功获取 ${funds.length} 只基金的准确数据`)
+      return funds
+    } else {
+      // 如果准确数据服务失败，降级到原来的真实数据服务
+      console.warn('准确数据服务无数据，降级到实时估值数据...')
+      const realFunds = await fetchRealFundData()
+      console.log(`使用实时估值数据: ${realFunds.length} 只基金`)
+      return realFunds
+    }
   } catch (error) {
     console.error('获取基金数据失败:', error)
-    // 降级到模拟数据
+    // 最后降级到模拟数据
+    console.warn('降级到模拟数据...')
     return generateMockFunds()
   }
 }

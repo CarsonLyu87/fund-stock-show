@@ -5,6 +5,7 @@ import './App.css'
 import FundTable from './components/FundTable'
 import StockChart from './components/StockChart'
 import SearchBar from './components/SearchBar'
+import DataAccuracyInfo from './components/DataAccuracyInfo'
 import type { Fund, StockData } from './types/index'
 import { fetchFundData, fetchStockData, initDataService, getMarketStatus, getFormattedLastUpdateTime } from './utils/api'
 
@@ -233,14 +234,28 @@ function App() {
           </div>
         ) : (
           <>
+            {/* 数据准确性说明 */}
+            <DataAccuracyInfo showDetails={false} />
+            
             {/* 基金表格 */}
             <div style={{ marginBottom: 24 }}>
               <Card 
                 title={`💰 基金列表 (${funds.length})`}
                 extra={
-                  <span style={{ fontSize: 12, color: '#666' }}>
-                    最后更新: {lastUpdate ? formatTime(lastUpdate) : '--:--:--'}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 12, color: '#666' }}>
+                      最后更新: {lastUpdate || '--:--:--'}
+                    </span>
+                    <Button 
+                      type="text" 
+                      icon={<ReloadOutlined />} 
+                      onClick={loadData}
+                      loading={loading}
+                      size="small"
+                    >
+                      刷新
+                    </Button>
+                  </div>
                 }
               >
                 <FundTable funds={funds} />
@@ -266,11 +281,16 @@ function App() {
         {/* 页脚信息 */}
         <div style={{ textAlign: 'center', marginTop: 24, color: '#666', fontSize: 12 }}>
           <p>
-            💡 数据每小时自动更新一次 | 
+            💡 数据每15分钟自动更新一次 | 
             {marketStatus.isOpen ? ' 🟢 实时市场数据' : ' ⚠️ 闭市时间模拟数据'} |
-            最后刷新: {refreshCount} 次 | 下次更新: {formatTime(Date.now() + 3600000)}
+            最后刷新: {refreshCount} 次 | 下次更新: {formatTime(Date.now() + 900000)}
           </p>
-          <p>基金数据来源: 天天基金/东方财富 | 股票数据来源: 新浪财经/雅虎财经 | 数据缓存: 30分钟</p>
+          <p>
+            📊 <strong>基金数据准确性说明:</strong> 单位净值为官方准确数据（每日更新） | 
+            实时估值为参考值（根据持仓估算） | 
+            数据来源: 东方财富官方API/天天基金
+          </p>
+          <p>股票数据来源: 新浪财经/雅虎财经 | 数据缓存: 15分钟</p>
         </div>
       </Content>
     </Layout>
