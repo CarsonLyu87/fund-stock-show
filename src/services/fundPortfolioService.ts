@@ -113,67 +113,93 @@ interface FundPortfolioValuation {
 }
 
 /**
- * 从新浪财经API获取股票实时数据
+ * 从新浪财经API获取股票实时数据（通过代理服务器）
  */
 async function fetchStockRealTimeData(symbols: string[]): Promise<StockRealTimeData[]> {
   if (symbols.length === 0) return []
   
   try {
-    const response = await axios.get(FUND_PORTFOLIO_API.stockRealTime(symbols), {
-      timeout: 8000,
-      headers: {
-        'Referer': 'https://finance.sina.com.cn/',
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-      },
-      responseType: 'text'
-    })
+    console.log(`📈 获取 ${symbols.length} 只股票实时数据: ${symbols.join(',')}`)
     
-    const data = response.data
-    const stocks: StockRealTimeData[] = []
-    
-    // 解析新浪财经数据格式
-    const lines = data.split(';').filter(line => line.trim())
-    
-    lines.forEach((line, index) => {
-      try {
-        const match = line.match(/var hq_str_(.+?)="(.+)"/)
-        if (!match) return
-        
-        const symbol = match[1]
-        const values = match[2].split(',')
-        
-        if (values.length >= 32) {
-          const name = values[0]
-          const openPrice = parseFloat(values[1])
-          const previousClose = parseFloat(values[2])
-          const currentPrice = parseFloat(values[3])
-          const highPrice = parseFloat(values[4])
-          const lowPrice = parseFloat(values[5])
-          
-          // 计算涨跌幅
-          const changeAmount = currentPrice - previousClose
-          const changePercent = previousClose > 0 ? (changeAmount / previousClose) * 100 : 0
-          
-          stocks.push({
-            symbol,
-            name,
-            currentPrice,
-            changePercent: parseFloat(changePercent.toFixed(2)),
-            changeAmount: parseFloat(changeAmount.toFixed(2)),
-            timestamp: Date.now()
-          })
-        }
-      } catch (error) {
-        console.warn(`解析股票数据失败 (${symbols[index]}):`, error)
-      }
-    })
-    
-    return stocks
+    // 首先尝试使用代理服务器
+    try {
+      const proxyUrl = `${PROXY_BASE_URL}/api/stock/${symbols.join(',')}`
+      
+      const response = await axios.get(proxyUrl, {
+        timeout: 10000,
+        responseType: 'text'
+      })
+      
+      const data = response.data
+      return parseSinaStockData(data, symbols)
+      
+    } catch (proxyError) {
+      console.warn('⚠️ 代理服务器获取股票数据失败，尝试直接请求:', proxyError.message)
+      
+      // 降级：尝试直接请求（可能遇到CORS问题）
+      const response = await axios.get(FUND_PORTFOLIO_API.stockRealTime(symbols), {
+        timeout: 8000,
+        headers: {
+          'Referer': 'https://finance.sina.com.cn/',
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+        },
+        responseType: 'text'
+      })
+      
+      const data = response.data
+      return parseSinaStockData(data, symbols)
+    }
     
   } catch (error) {
-    console.error('获取股票实时数据失败:', error)
-    return []
+    console.error('❌ 获取股票实时数据失败:', error)
+    throw error
   }
+}
+
+/**
+ * 解析新浪财经股票数据
+ */
+function parseSinaStockData(data: string, symbols: string[]): StockRealTimeData[] {
+  const stocks: StockRealTimeData[] = []
+  
+  // 解析新浪财经数据格式
+  const lines = data.split(';').filter(line => line.trim())
+  
+  lines.forEach((line, index) => {
+    try {
+      const match = line.match(/var hq_str_(.+?)="(.+)"/)
+      if (!match) return
+      
+      const symbol = match[1]
+      const values = match[2].split(',')
+      
+      if (values.length >= 32) {
+        const name = values[0]
+        const openPrice = parseFloat(values[1])
+        const previousClose = parseFloat(values[2])
+        const currentPrice = parseFloat(values[3])
+        const highPrice = parseFloat(values[4])
+        const lowPrice = parseFloat(values[5])
+        
+        // 计算涨跌幅
+        const changeAmount = currentPrice - previousClose
+        const changePercent = previousClose > 0 ? (changeAmount / previousClose) * 100 : 0
+        
+        stocks.push({
+          symbol,
+          name,
+          currentPrice,
+          changePercent: parseFloat(changePercent.toFixed(2)),
+          changeAmount: parseFloat(changeAmount.toFixed(2)),
+          timestamp: Date.now()
+        })
+      }
+    } catch (error) {
+      console.warn(`解析股票数据失败 (${symbols[index]}):`, error)
+    }
+  })
+  
+  return stocks
 }
 
 /**
