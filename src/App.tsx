@@ -6,6 +6,7 @@ import EnhancedFundTable from './components/EnhancedFundTable'
 import StockChart from './components/StockChart'
 import SearchBar from './components/SearchBar'
 import DataAccuracyInfo from './components/DataAccuracyInfo'
+import FundSearchAdd from './components/FundSearchAdd'
 import type { Fund, StockData } from './types/index'
 import { fetchFundData, fetchStockData, initDataService, getMarketStatus, getFormattedLastUpdateTime } from './utils/api'
 
@@ -243,9 +244,21 @@ function App() {
           </Col>
         </Row>
 
-        {/* 搜索栏 */}
+        {/* 基金搜索与添加 */}
         <div style={{ marginBottom: 16 }}>
-          <SearchBar onSearch={() => {}} />
+          <FundSearchAdd 
+            onFundsUpdated={loadData}
+            onFundAdded={(fundCode) => {
+              console.log(`基金 ${fundCode} 已添加，重新加载数据`)
+              // 重新加载数据以显示新添加的基金
+              setTimeout(() => loadData(), 500)
+            }}
+            onFundRemoved={(fundCode) => {
+              console.log(`基金 ${fundCode} 已移除，重新加载数据`)
+              // 重新加载数据以更新列表
+              setTimeout(() => loadData(), 500)
+            }}
+          />
         </div>
 
         {loading ? (

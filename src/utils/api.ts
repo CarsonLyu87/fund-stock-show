@@ -33,21 +33,41 @@ export const getMarketStatus = () => {
 
 
 
+// 获取用户基金列表
+const getUserFundCodes = (): string[] => {
+  try {
+    // 尝试从localStorage获取用户基金配置
+    const stored = localStorage.getItem('fund_stock_show_user_funds')
+    if (stored) {
+      const userFunds = JSON.parse(stored)
+      if (Array.isArray(userFunds) && userFunds.length > 0) {
+        return userFunds.map((fund: any) => fund.code)
+      }
+    }
+  } catch (error) {
+    console.error('获取用户基金列表失败:', error)
+  }
+  
+  // 默认基金列表
+  return [
+    '005827', '161725', '003095', '110022', '519674',
+    '260108', '000404', '001714', '000248', '001475'
+  ]
+}
+
 // 获取基金数据 - 优先使用代理服务器避免CORS问题
 export const fetchFundData = async (): Promise<Fund[]> => {
   console.log('📊 获取基金数据（优先使用代理服务器避免CORS）...')
   
-  // 支持的基金代码列表
-  const SUPPORTED_FUNDS = [
-    '001714', '005827', '161725', '003095', '110022',
-    '519674', '260108', '000404', '000248', '001475'
-  ]
+  // 使用用户配置的基金代码列表
+  const userFundCodes = getUserFundCodes()
+  console.log(`📋 用户基金列表: ${userFundCodes.length} 只基金`, userFundCodes)
   
   try {
     // 1. 首先尝试使用代理服务器
     console.log('🔍 步骤1: 尝试使用代理服务器...')
     try {
-      const proxyFunds = await fetchFundsWithProxy(SUPPORTED_FUNDS)
+      const proxyFunds = await fetchFundsWithProxy(userFundCodes)
       if (proxyFunds.length > 0) {
         console.log(`✅ 通过代理获取 ${proxyFunds.length} 只基金数据`)
         
