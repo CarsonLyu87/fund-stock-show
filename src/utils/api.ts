@@ -2,10 +2,12 @@ import axios from 'axios'
 import type { Fund, StockData } from '../types'
 import { fetchRealFundData, fetchRealStockData, initDataService, getUpdateInfo, clearCache } from '../services/realDataService'
 import { fetchAccurateFundData, getFundDetail, getDataSourceStatus, clearFundCache } from '../services/accurateFundService'
+import { calculateFundValuationByPortfolio, calculateMultipleFundValuations, compareValuationMethods, getPortfolioServiceStatus } from '../services/fundPortfolioService'
 
 // 重新导出数据服务函数
 export { initDataService, getUpdateInfo, clearCache }
 export { fetchAccurateFundData, getFundDetail, getDataSourceStatus, clearFundCache }
+export { calculateFundValuationByPortfolio, calculateMultipleFundValuations, compareValuationMethods, getPortfolioServiceStatus }
 
 // 获取市场状态
 export const getMarketStatus = () => {
@@ -30,25 +32,101 @@ export const getMarketStatus = () => {
 
 
 
-// 获取基金数据 - 使用准确数据服务
+// 获取基金数据 - 使用准确数据服务（包含持仓估值）
 export const fetchFundData = async (): Promise<Fund[]> => {
-  console.log('获取基金数据（每15分钟更新，使用准确数据源）...')
+  console.log('获取基金数据（每15分钟更新，使用准确数据源 + 持仓估值）...')
+  
   try {
-    // 优先使用准确数据服务
-    const funds = await fetchAccurateFundData()
+    // 1. 首先获取准确数据（官方净值 + API估值）
+    const accurateFunds = await fetchAccurateFundData()
     
-    if (funds.length > 0) {
-      console.log(`✅ 成功获取 ${funds.length} 只基金的准确数据`)
-      return funds
-    } else {
-      // 如果准确数据服务失败，降级到原来的真实数据服务
+    if (accurateFunds.length === 0) {
       console.warn('准确数据服务无数据，降级到实时估值数据...')
       const realFunds = await fetchRealFundData()
       console.log(`使用实时估值数据: ${realFunds.length} 只基金`)
       return realFunds
     }
+    
+    console.log(`✅ 获取 ${accurateFunds.length} 只基金的准确数据`)
+    
+    // 2. 对于支持持仓计算的基金，尝试获取持仓估值
+    const portfolioServiceStatus = getPortfolioServiceStatus()
+    const supportedPortfolioFunds = portfolioServiceStatus.supportedFunds
+    
+    // 创建基础净值映射
+    const baseNetValues: Record<string, number> = {}
+    accurateFunds.forEach(fund => {
+      baseNetValues[fund.code] = fund.currentPrice
+    })
+    
+    // 批量计算持仓估值
+    const portfolioValuations = await calculateMultipleFundValuations(
+      supportedPortfolioFunds,
+      baseNetValues
+    )
+    
+    // 3. 合并数据
+    const enhancedFunds = accurateFunds.map(fund => {
+      // 查找是否有持仓估值
+      const portfolioValuation = portfolioValuations.find(v => v.fundCode === fund.code)
+      
+      if (portfolioValuation) {
+        // 创建增强的基金数据
+        return {
+          ...fund,
+          // 添加持仓估值信息
+          portfolioCalculatedValue: portfolioValuation.calculatedValue,
+          portfolioCalculatedChangePercent: portfolioValuation.calculatedChangePercent,
+          portfolioConfidence: portfolioValuation.confidence,
+          portfolioStockCount: portfolioValuation.stockDetails.length,
+          // 计算估值差异
+          valuationDifference: fund.estimatedValue > 0 
+            ? Math.abs(portfolioValuation.calculatedChangePercent - fund.estimatedChangePercent)
+            : 0,
+          // 标记数据来源
+          dataSources: [
+            'official_net_value',
+            'api_estimate',
+            'portfolio_calculation'
+          ]
+        } as Fund & {
+          portfolioCalculatedValue?: number
+          portfolioCalculatedChangePercent?: number
+          portfolioConfidence?: number
+          portfolioStockCount?: number
+          valuationDifference?: number
+          dataSources?: string[]
+        }
+      }
+      
+      return fund
+    })
+    
+    // 统计持仓估值覆盖情况
+    const portfolioCoverage = portfolioValuations.length
+    console.log(`📊 持仓估值覆盖: ${portfolioCoverage}/${accurateFunds.length} 只基金`)
+    
+    if (portfolioCoverage > 0) {
+      console.log('🎯 持仓估值计算完成，数据已增强')
+    }
+    
+    return enhancedFunds as Fund[]
+    
   } catch (error) {
     console.error('获取基金数据失败:', error)
+    
+    // 降级策略
+    try {
+      console.warn('尝试使用基础数据服务...')
+      const realFunds = await fetchRealFundData()
+      if (realFunds.length > 0) {
+        console.log(`使用基础数据: ${realFunds.length} 只基金`)
+        return realFunds
+      }
+    } catch (fallbackError) {
+      console.error('基础数据服务也失败:', fallbackError)
+    }
+    
     // 最后降级到模拟数据
     console.warn('降级到模拟数据...')
     return generateMockFunds()

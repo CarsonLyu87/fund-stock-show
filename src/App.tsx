@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Layout, Card, Row, Col, Statistic, Alert, Spin, Tag, Button } from 'antd'
 import { ArrowUpOutlined, ArrowDownOutlined, ReloadOutlined } from '@ant-design/icons'
 import './App.css'
-import FundTable from './components/FundTable'
+import EnhancedFundTable from './components/EnhancedFundTable'
 import StockChart from './components/StockChart'
 import SearchBar from './components/SearchBar'
 import DataAccuracyInfo from './components/DataAccuracyInfo'
@@ -258,7 +258,7 @@ function App() {
                   </div>
                 }
               >
-                <FundTable funds={funds} />
+                <EnhancedFundTable funds={funds} loading={loading} />
               </Card>
             </div>
 
