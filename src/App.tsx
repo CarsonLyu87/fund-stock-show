@@ -19,6 +19,7 @@ function App() {
   const [lastUpdate, setLastUpdate] = useState<number>(0)
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [refreshCount, setRefreshCount] = useState(0)
+  const [fundsUpdated, setFundsUpdated] = useState(0) // 用于触发基金数据重新加载
 
   // 初始化数据服务
   useEffect(() => {
@@ -80,6 +81,14 @@ function App() {
     loadData()
   }, [])
 
+  // 当基金列表更新时重新加载数据
+  useEffect(() => {
+    if (fundsUpdated > 0) {
+      console.log('🔄 基金列表已更新，重新加载数据...')
+      loadData()
+    }
+  }, [fundsUpdated])
+
   // 自动刷新 - 每15分钟更新一次
   useEffect(() => {
     if (!autoRefresh) return
@@ -90,6 +99,12 @@ function App() {
     
     return () => clearInterval(intervalId)
   }, [autoRefresh])
+
+  // 处理基金更新
+  const handleFundsUpdated = () => {
+    console.log('📝 基金列表已更新，触发数据重新加载')
+    setFundsUpdated(prev => prev + 1)
+  }
 
   // 计算统计数据
   const totalFunds = funds.length
@@ -253,7 +268,7 @@ function App() {
             
             {/* 统一的基金监控与管理 */}
             <div style={{ marginBottom: 24 }}>
-              <UnifiedFundManager onDataReload={loadData} />
+              <UnifiedFundManager onDataReload={loadData} onFundsUpdated={handleFundsUpdated} />
             </div>
 
             {/* 股票图表 */}

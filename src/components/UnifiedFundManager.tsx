@@ -24,9 +24,10 @@ const { Search } = Input
 
 interface UnifiedFundManagerProps {
   onDataReload?: () => void
+  onFundsUpdated?: () => void
 }
 
-const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload }) => {
+const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload, onFundsUpdated }) => {
   // 状态管理
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<FundSearchResult[]>([])
@@ -124,6 +125,9 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload })
         )
       )
       
+      // 触发基金更新回调
+      onFundsUpdated?.()
+      
       // 重新加载基金数据
       setTimeout(() => {
         console.log('🔄 重新加载基金数据...')
@@ -157,6 +161,9 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload })
               item.code === fundCode ? { ...item, isAdded: false } : item
             )
           )
+          
+          // 触发基金更新回调
+          onFundsUpdated?.()
           
           // 重新加载基金数据
           setTimeout(() => {
@@ -234,6 +241,9 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload })
         loadUserFunds()
         setImportModalVisible(false)
         setImportText('')
+        
+        // 触发基金更新回调
+        onFundsUpdated?.()
         
         // 重新加载基金数据
         setTimeout(() => {
@@ -696,6 +706,9 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload })
                           prev.map(item => ({ ...item, isAdded: false }))
                         )
                         message.success('已清空所有关注的基金')
+                        
+                        // 触发基金更新回调
+                        onFundsUpdated?.()
                         
                         // 重新加载基金数据
                         setTimeout(() => {
