@@ -34,11 +34,13 @@ export const getMarketStatus = () => {
 
 // 获取基金数据 - 使用准确数据服务（包含持仓估值）
 export const fetchFundData = async (): Promise<Fund[]> => {
-  console.log('获取基金数据（每15分钟更新，使用准确数据源 + 持仓估值）...')
+  console.log('📊 获取基金数据（每15分钟更新，使用准确数据源 + 持仓估值）...')
   
   try {
     // 1. 首先获取准确数据（官方净值 + API估值）
+    console.log('🔍 步骤1: 获取准确基金数据...')
     const accurateFunds = await fetchAccurateFundData()
+    console.log(`📈 准确数据获取结果: ${accurateFunds.length} 只基金`)
     
     if (accurateFunds.length === 0) {
       console.warn('准确数据服务无数据，降级到实时估值数据...')
@@ -260,7 +262,7 @@ export const getNextUpdateTime = (): string => {
 }
 
 // 实际API配置（用于连接真实数据源）
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'
+const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || 'http://localhost:3001'
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

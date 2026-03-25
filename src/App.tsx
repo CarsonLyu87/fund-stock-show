@@ -34,13 +34,17 @@ function App() {
   // 加载数据
   const loadData = async () => {
     try {
+      console.log('🚀 开始加载数据...')
       setLoading(true)
       setError(null)
       
-      const [fundsData, stocksData] = await Promise.all([
-        fetchFundData(),
-        fetchStockData()
-      ])
+      console.log('📡 获取基金数据...')
+      const fundsData = await fetchFundData()
+      console.log(`✅ 基金数据获取完成: ${fundsData.length} 只基金`)
+      
+      console.log('📡 获取股票数据...')
+      const stocksData = await fetchStockData()
+      console.log(`✅ 股票数据获取完成: ${stocksData.length} 只股票`)
       
       setFunds(fundsData)
       setStocks(stocksData)
@@ -48,9 +52,25 @@ function App() {
       setLastUpdate(getFormattedLastUpdateTime())
       setRefreshCount(prev => prev + 1)
       
+      console.log('🎉 数据加载完成，更新UI')
+      
     } catch (err) {
-      setError('加载数据失败，请检查网络连接')
-      console.error('加载数据失败:', err)
+      const errorMsg = err instanceof Error ? err.message : '未知错误'
+      setError(`加载数据失败: ${errorMsg}`)
+      console.error('❌ 加载数据失败:', err)
+      
+      // 尝试使用模拟数据作为最后手段
+      console.log('🔄 尝试使用模拟数据...')
+      try {
+        const mockFunds = generateMockFunds()
+        const mockStocks = generateMockStocks()
+        setFunds(mockFunds)
+        setStocks(mockStocks)
+        setLastUpdate(getFormattedLastUpdateTime())
+        console.log(`✅ 使用模拟数据: ${mockFunds.length} 只基金, ${mockStocks.length} 只股票`)
+      } catch (mockError) {
+        console.error('❌ 模拟数据也失败:', mockError)
+      }
     } finally {
       setLoading(false)
     }
