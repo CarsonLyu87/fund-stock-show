@@ -6,7 +6,7 @@ import FundTable from './components/FundTable'
 import StockChart from './components/StockChart'
 import SearchBar from './components/SearchBar'
 import type { Fund, StockData } from './types/index'
-import { fetchFundData, fetchStockData, initDataService, getMarketStatus, getLastUpdateTime } from './utils/api'
+import { fetchFundData, fetchStockData, initDataService, getMarketStatus, getFormattedLastUpdateTime } from './utils/api'
 
 const { Header, Content } = Layout
 
@@ -44,7 +44,7 @@ function App() {
       setFunds(fundsData)
       setStocks(stocksData)
       setMarketStatus(getMarketStatus())
-      setLastUpdate(getLastUpdateTime())
+      setLastUpdate(getFormattedLastUpdateTime())
       setRefreshCount(prev => prev + 1)
       
     } catch (err) {

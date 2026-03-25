@@ -144,8 +144,8 @@ function generateHourlyHistory(basePrice: number) {
   return history
 }
 
-// 获取最后一次更新时间
-export const getLastUpdateTime = (): string => {
+// 获取最后一次更新时间（格式化字符串）
+export const getFormattedLastUpdateTime = (): string => {
   const now = new Date()
   return now.toLocaleString('zh-CN', {
     year: 'numeric',
