@@ -1,129 +1,141 @@
 import axios from 'axios'
 import type { Fund, StockData } from '../types'
+import { fetchRealFundData, fetchRealStockData, initDataService, getUpdateInfo, clearCache } from '../services/realDataService'
 
-// 真实基金数据 - 基于天天基金等网站的真实基金
-const realFunds: Fund[] = [
-  { id: '1', name: '中欧医疗创新股票A', code: '006228', currentPrice: 2.45, changePercent: 2.16, changeAmount: 0.05, volume: 15000000, timestamp: new Date().toISOString() },
-  { id: '2', name: '南方纳斯达克100指数', code: '040046', currentPrice: 3.82, changePercent: -1.43, changeAmount: -0.06, volume: 8000000, timestamp: new Date().toISOString() },
-  { id: '3', name: '广发全球精选股票(QDII)', code: '270023', currentPrice: 1.68, changePercent: -0.58, changeAmount: -0.01, volume: 5000000, timestamp: new Date().toISOString() },
-  { id: '4', name: '易方达消费行业股票', code: '110022', currentPrice: 3.25, changePercent: 1.25, changeAmount: 0.04, volume: 12000000, timestamp: new Date().toISOString() },
-  { id: '5', name: '华夏上证50ETF', code: '510050', currentPrice: 2.58, changePercent: 0.78, changeAmount: 0.02, volume: 25000000, timestamp: new Date().toISOString() },
-  { id: '6', name: '招商中证白酒指数', code: '161725', currentPrice: 0.85, changePercent: 1.89, changeAmount: 0.02, volume: 18000000, timestamp: new Date().toISOString() },
-  { id: '7', name: '富国天惠成长混合', code: '161005', currentPrice: 3.12, changePercent: 0.96, changeAmount: 0.03, volume: 9000000, timestamp: new Date().toISOString() },
-  { id: '8', name: '汇添富消费行业混合', code: '000083', currentPrice: 4.56, changePercent: 0.88, changeAmount: 0.04, volume: 7500000, timestamp: new Date().toISOString() },
-  { id: '9', name: '嘉实沪深300ETF联接', code: '160706', currentPrice: 1.23, changePercent: 0.41, changeAmount: 0.01, volume: 35000000, timestamp: new Date().toISOString() },
-  { id: '10', name: '工银瑞信前沿医疗股票', code: '001717', currentPrice: 2.89, changePercent: 1.75, changeAmount: 0.05, volume: 11000000, timestamp: new Date().toISOString() },
-]
+// 重新导出真实数据服务函数
+export { initDataService, getUpdateInfo, clearCache }
 
-// 真实股票数据 - 基于A股和美股真实数据
-const realStocks: StockData[] = [
-  { 
-    symbol: '000001.SS', 
-    name: '上证指数', 
-    price: 3068.46, 
-    change: 12.35, 
-    changePercent: 0.40, 
-    volume: 280000000000,
-    timestamp: new Date().toISOString(),
-    history: Array.from({ length: 24 }, (_, i) => ({
-      time: `${i.toString().padStart(2, '0')}:00`,
-      price: 3050 + Math.random() * 40
-    }))
-  },
-  { 
-    symbol: '399001.SZ', 
-    name: '深证成指', 
-    price: 9625.28, 
-    change: 45.62, 
-    changePercent: 0.48, 
-    volume: 320000000000,
-    timestamp: new Date().toISOString(),
-    history: Array.from({ length: 24 }, (_, i) => ({
-      time: `${i.toString().padStart(2, '0')}:00`,
-      price: 9580 + Math.random() * 100
-    }))
-  },
-  { 
-    symbol: '000300.SS', 
-    name: '沪深300', 
-    price: 3589.15, 
-    change: 18.24, 
-    changePercent: 0.51, 
-    volume: 180000000000,
-    timestamp: new Date().toISOString(),
-    history: Array.from({ length: 24 }, (_, i) => ({
-      time: `${i.toString().padStart(2, '0')}:00`,
-      price: 3570 + Math.random() * 40
-    }))
-  },
-  { 
-    symbol: 'AAPL', 
-    name: '苹果公司', 
-    price: 182.63, 
-    change: 1.25, 
-    changePercent: 0.69, 
-    volume: 45000000,
-    timestamp: new Date().toISOString(),
-    history: Array.from({ length: 24 }, (_, i) => ({
-      time: `${i.toString().padStart(2, '0')}:00`,
-      price: 180 + Math.random() * 5
-    }))
-  },
-  { 
-    symbol: 'MSFT', 
-    name: '微软公司', 
-    price: 415.86, 
-    change: 3.42, 
-    changePercent: 0.83, 
-    volume: 28000000,
-    timestamp: new Date().toISOString(),
-    history: Array.from({ length: 24 }, (_, i) => ({
-      time: `${i.toString().padStart(2, '0')}:00`,
-      price: 410 + Math.random() * 10
-    }))
-  },
-  { 
-    symbol: 'TSLA', 
-    name: '特斯拉', 
-    price: 175.34, 
-    change: -2.15, 
-    changePercent: -1.21, 
-    volume: 95000000,
-    timestamp: new Date().toISOString(),
-    history: Array.from({ length: 24 }, (_, i) => ({
-      time: `${i.toString().padStart(2, '0')}:00`,
-      price: 170 + Math.random() * 10
-    }))
-  },
-]
-
-// 生成更真实的波动数据（基于市场规律）
-function generateRealisticChange(basePrice: number, baseChangePercent: number): { price: number, changePercent: number, changeAmount: number } {
-  // 市场波动通常在-3%到+3%之间
-  const marketVolatility = (Math.random() - 0.5) * 0.6 // ±0.3%
-  const newChangePercent = baseChangePercent + marketVolatility
+// 获取市场状态
+export const getMarketStatus = () => {
+  const now = new Date()
+  const hour = now.getHours()
+  const isWeekend = now.getDay() === 0 || now.getDay() === 6
   
-  // 确保涨跌幅在合理范围内
-  const clampedChangePercent = Math.max(-3, Math.min(3, newChangePercent))
-  const changeAmount = basePrice * clampedChangePercent / 100
-  const price = basePrice + changeAmount
+  // A股交易时间：周一至周五 9:30-11:30, 13:00-15:00
+  const isTradingHours = !isWeekend && (
+    (hour >= 9 && hour < 11) || 
+    (hour === 11 && now.getMinutes() < 30) ||
+    (hour >= 13 && hour < 15)
+  )
   
   return {
-    price: parseFloat(price.toFixed(2)),
-    changePercent: parseFloat(clampedChangePercent.toFixed(2)),
-    changeAmount: parseFloat(changeAmount.toFixed(2))
+    isOpen: isTradingHours,
+    openTime: '09:30',
+    closeTime: '15:00',
+    nextOpenTime: isWeekend ? '下周一 09:30' : '明日 09:30'
   }
 }
 
-// 生成真实的历史数据（基于时间序列）
-function generateRealisticHistory(basePrice: number, volatility: number = 0.5) {
+// 获取最后更新时间
+export const getLastUpdateTime = (): number => {
+  return Date.now()
+}
+
+// 获取基金数据 - 使用真实数据服务
+export const fetchFundData = async (): Promise<Fund[]> => {
+  console.log('获取基金数据（每15分钟更新）...')
+  try {
+    const funds = await fetchRealFundData()
+    console.log(`成功获取 ${funds.length} 只基金数据`)
+    return funds
+  } catch (error) {
+    console.error('获取基金数据失败:', error)
+    // 降级到模拟数据
+    return generateMockFunds()
+  }
+}
+
+// 获取股票数据 - 使用真实数据服务
+export const fetchStockData = async (): Promise<StockData[]> => {
+  console.log('获取股票数据（每15分钟更新）...')
+  try {
+    const stocks = await fetchRealStockData()
+    console.log(`成功获取 ${stocks.length} 只股票数据`)
+    return stocks
+  } catch (error) {
+    console.error('获取股票数据失败:', error)
+    // 降级到模拟数据
+    return generateMockStocks()
+  }
+}
+
+// 模拟数据生成（降级使用）
+function generateMockFunds(): Fund[] {
+  console.log('使用模拟基金数据（降级模式）')
+  const popularFunds = [
+    { code: '005827', name: '易方达蓝筹精选混合' },
+    { code: '161725', name: '招商中证白酒指数' },
+    { code: '003095', name: '中欧医疗健康混合' },
+    { code: '110011', name: '易方达中小盘混合' },
+    { code: '519674', name: '银河创新成长混合' },
+    { code: '260108', name: '景顺长城新兴成长混合' },
+    { code: '000404', name: '易方达新兴成长混合' },
+    { code: '001717', name: '工银瑞信前沿医疗股票' },
+    { code: '006228', name: '中欧医疗创新股票A' },
+    { code: '040046', name: '南方纳斯达克100指数' }
+  ]
+  
+  return popularFunds.map((fund, index) => {
+    const basePrice = 1 + Math.random() * 4
+    const changePercent = (Math.random() - 0.5) * 3 // -1.5% 到 +1.5%
+    const changeAmount = basePrice * changePercent / 100
+    
+    return {
+      id: `mock_fund_${index}`,
+      name: fund.name,
+      code: fund.code,
+      currentPrice: parseFloat(basePrice.toFixed(3)),
+      changePercent: parseFloat(changePercent.toFixed(2)),
+      changeAmount: parseFloat(changeAmount.toFixed(3)),
+      volume: Math.floor(Math.random() * 10000000) + 5000000,
+      timestamp: new Date().toISOString()
+    }
+  })
+}
+
+function generateMockStocks(): StockData[] {
+  console.log('使用模拟股票数据（降级模式）')
+  const stocks = [
+    { symbol: 'sh000001', name: '上证指数' },
+    { symbol: 'sz399001', name: '深证成指' },
+    { symbol: 'sz399006', name: '创业板指' },
+    { symbol: 'sh000300', name: '沪深300' },
+    { symbol: 'sh000016', name: '上证50' },
+    { symbol: 'sz399005', name: '中小板指' }
+  ]
+  
+  return stocks.map((stock, index) => {
+    const basePrice = stock.symbol.includes('sh000001') ? 3000 + Math.random() * 200 :
+                     stock.symbol.includes('sz399001') ? 9000 + Math.random() * 1000 :
+                     stock.symbol.includes('sz399006') ? 1800 + Math.random() * 200 :
+                     stock.symbol.includes('sh000300') ? 3500 + Math.random() * 200 :
+                     stock.symbol.includes('sh000016') ? 2500 + Math.random() * 100 :
+                     stock.symbol.includes('sz399005') ? 6000 + Math.random() * 500 : 100
+    
+    const changePercent = (Math.random() - 0.5) * 2 // -1% 到 +1%
+    const changeAmount = basePrice * changePercent / 100
+    
+    return {
+      id: `mock_stock_${index}`,
+      symbol: stock.symbol,
+      name: stock.name,
+      price: parseFloat(basePrice.toFixed(2)),
+      change: parseFloat(changeAmount.toFixed(2)),
+      changePercent: parseFloat(changePercent.toFixed(2)),
+      volume: Math.floor(Math.random() * 1000000000) + 500000000,
+      timestamp: new Date().toISOString(),
+      history: generateHourlyHistory(basePrice)
+    }
+  })
+}
+
+function generateHourlyHistory(basePrice: number) {
   const history = []
   let currentPrice = basePrice
   
   for (let i = 0; i < 24; i++) {
-    // 模拟市场开盘和收盘的波动
-    const hourFactor = i < 9 || i > 15 ? 0.3 : 1.0 // 非交易时间波动较小
-    const change = (Math.random() - 0.5) * volatility * hourFactor
+    const hourFactor = i < 9 || i > 15 ? 0.1 : 0.3
+    const change = (Math.random() - 0.5) * hourFactor
     currentPrice = currentPrice * (1 + change / 100)
     
     history.push({
@@ -133,59 +145,6 @@ function generateRealisticHistory(basePrice: number, volatility: number = 0.5) {
   }
   
   return history
-}
-
-// 获取基金数据 - 模拟真实API调用
-export const fetchFundData = async (): Promise<Fund[]> => {
-  // 模拟API延迟（真实网站通常有1-2秒延迟）
-  await new Promise(resolve => setTimeout(resolve, 800))
-  
-  const now = new Date()
-  const timestamp = now.toISOString()
-  
-  // 生成更真实的基金数据
-  return realFunds.map(fund => {
-    const { price, changePercent, changeAmount } = generateRealisticChange(
-      fund.currentPrice,
-      fund.changePercent
-    )
-    
-    return {
-      ...fund,
-      currentPrice: price,
-      changePercent,
-      changeAmount,
-      volume: Math.floor(fund.volume * (0.8 + Math.random() * 0.4)), // 成交量波动
-      timestamp
-    }
-  })
-}
-
-// 获取股票数据 - 模拟真实API调用
-export const fetchStockData = async (): Promise<StockData[]> => {
-  // 模拟API延迟
-  await new Promise(resolve => setTimeout(resolve, 800))
-  
-  const now = new Date()
-  const timestamp = now.toISOString()
-  
-  // 生成更真实的股票数据
-  return realStocks.map(stock => {
-    const { price, changePercent, changeAmount } = generateRealisticChange(
-      stock.price,
-      stock.changePercent
-    )
-    
-    return {
-      ...stock,
-      price,
-      change: changeAmount,
-      changePercent,
-      volume: Math.floor(stock.volume * (0.7 + Math.random() * 0.6)),
-      timestamp,
-      history: generateRealisticHistory(price, stock.symbol.includes('.SS') || stock.symbol.includes('.SZ') ? 0.8 : 1.2)
-    }
-  })
 }
 
 // 获取最后一次更新时间

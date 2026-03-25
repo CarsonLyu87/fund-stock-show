@@ -14,7 +14,7 @@
 ### 2. 数据源配置 (`src/config/dataSources.ts`)
 - **股票数据源**: Yahoo Finance（默认）、Alpha Vantage、Twelve Data
 - **基金数据源**: 东方财富网（默认）、天天基金网
-- **更新频率**: 股票30秒，基金1分钟
+- **更新频率**: 股票和基金均为15分钟
 - **支持列表**: 10只热门股票 + 7只热门基金
 
 ### 3. 更新后的API工具 (`src/utils/api.ts`)

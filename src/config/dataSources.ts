@@ -24,9 +24,15 @@ export interface DataSourceConfig {
     stock: number; // 股票数据更新频率（毫秒）
     fund: number;  // 基金数据更新频率（毫秒）
   };
+  
+  // 缓存配置
+  cache: {
+    enabled: boolean;
+    ttl: number; // 缓存存活时间（毫秒）
+  };
 }
 
-// 默认配置 - 使用免费API源
+// 默认配置 - 使用免费API源，每小时更新一次
 export const defaultConfig: DataSourceConfig = {
   stock: {
     provider: 'yahoo',
@@ -39,8 +45,12 @@ export const defaultConfig: DataSourceConfig = {
     rateLimit: 50,
   },
   updateFrequency: {
-    stock: 30000, // 30秒更新一次股票数据
-    fund: 60000,  // 1分钟更新一次基金数据
+    stock: 900000, // 15分钟更新一次股票数据
+    fund: 900000,  // 15分钟更新一次基金数据
+  },
+  cache: {
+    enabled: true,
+    ttl: 900000, // 缓存15分钟
   },
 };
 

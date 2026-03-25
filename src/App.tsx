@@ -60,13 +60,13 @@ function App() {
     loadData()
   }, [])
 
-  // 自动刷新
+  // 自动刷新 - 每15分钟更新一次
   useEffect(() => {
     if (!autoRefresh) return
     
     const intervalId = setInterval(() => {
       loadData()
-    }, 30000) // 每30秒刷新一次
+    }, 900000) // 每15分钟（900000毫秒）刷新一次
     
     return () => clearInterval(intervalId)
   }, [autoRefresh])
@@ -266,11 +266,11 @@ function App() {
         {/* 页脚信息 */}
         <div style={{ textAlign: 'center', marginTop: 24, color: '#666', fontSize: 12 }}>
           <p>
-            💡 数据每30秒自动更新一次 | 
+            💡 数据每小时自动更新一次 | 
             {marketStatus.isOpen ? ' 🟢 实时市场数据' : ' ⚠️ 闭市时间模拟数据'} |
-            最后刷新: {refreshCount} 次
+            最后刷新: {refreshCount} 次 | 下次更新: {formatTime(Date.now() + 3600000)}
           </p>
-          <p>基金数据来源: 东方财富网 | 股票数据来源: Yahoo Finance</p>
+          <p>基金数据来源: 天天基金/东方财富 | 股票数据来源: 新浪财经/雅虎财经 | 数据缓存: 30分钟</p>
         </div>
       </Content>
     </Layout>
