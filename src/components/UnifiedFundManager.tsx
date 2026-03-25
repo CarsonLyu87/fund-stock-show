@@ -111,9 +111,11 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload })
 
   // 处理添加基金
   const handleAddFund = (fund: FundSearchResult) => {
+    console.log('🔍 开始添加基金:', fund.code, fund.name)
     const success = addFundToUserList(fund)
     
     if (success) {
+      console.log('✅ 添加基金成功:', fund.code)
       message.success(`已添加基金: ${fund.name}`)
       loadUserFunds()
       setSearchResults(prev => 
@@ -124,16 +126,19 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload })
       
       // 重新加载基金数据
       setTimeout(() => {
+        console.log('🔄 重新加载基金数据...')
         loadFundData()
         onDataReload?.()
       }, 500)
     } else {
+      console.log('⚠️ 基金已添加:', fund.code)
       message.warning('该基金已添加')
     }
   }
 
   // 处理移除基金
   const handleRemoveFund = (fundCode: string, fundName: string) => {
+    console.log('🔍 开始移除基金:', fundCode, fundName)
     Modal.confirm({
       title: '确认移除',
       content: `确定要移除基金 "${fundName}" 吗？`,
@@ -144,6 +149,7 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload })
         const success = removeFundFromUserList(fundCode)
         
         if (success) {
+          console.log('✅ 移除基金成功:', fundCode)
           message.success(`已移除基金: ${fundName}`)
           loadUserFunds()
           setSearchResults(prev => 
@@ -154,6 +160,7 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload })
           
           // 重新加载基金数据
           setTimeout(() => {
+            console.log('🔄 重新加载基金数据...')
             loadFundData()
             onDataReload?.()
           }, 500)
@@ -394,10 +401,12 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload })
                 icon={isAdded ? <DeleteOutlined /> : <PlusOutlined />}
                 size="small"
                 onClick={() => {
+                  console.log('🔍 监控表格 - 点击操作按钮:', record.code, record.name, 'isAdded:', isAdded)
                   if (isAdded) {
                     handleRemoveFund(record.code, record.name)
                   } else {
-                    handleAddFund({
+                    // 创建一个 FundSearchResult 对象
+                    const fundSearchResult: FundSearchResult = {
                       code: record.code,
                       name: record.name,
                       type: record.type,
@@ -405,7 +414,8 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload })
                       netValue: record.netValue,
                       changePercent: record.changePercent,
                       isAdded: false
-                    })
+                    }
+                    handleAddFund(fundSearchResult)
                   }
                 }}
               >
@@ -586,7 +596,10 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload })
                         type="primary" 
                         danger 
                         icon={<DeleteOutlined />}
-                        onClick={() => handleRemoveFund(fund.code, fund.name)}
+                        onClick={() => {
+                          console.log('🔍 搜索结果列表 - 点击已关注按钮:', fund.code, fund.name)
+                          handleRemoveFund(fund.code, fund.name)
+                        }}
                       >
                         已关注
                       </Button>
@@ -596,7 +609,10 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload })
                       <Button 
                         type="primary" 
                         icon={<PlusOutlined />}
-                        onClick={() => handleAddFund(fund)}
+                        onClick={() => {
+                          console.log('🔍 搜索结果列表 - 点击关注按钮:', fund.code, fund.name)
+                          handleAddFund(fund)
+                        }}
                       >
                         关注
                       </Button>
