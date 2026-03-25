@@ -771,6 +771,42 @@ export function importUserFunds(jsonString: string): boolean {
   return false
 }
 
+/**
+ * 更新用户基金备注
+ */
+export function updateFundNote(code: string, notes: string): boolean {
+  try {
+    const userFunds = getUserFunds()
+    const fundIndex = userFunds.findIndex(fund => fund.code === code)
+    
+    if (fundIndex !== -1) {
+      userFunds[fundIndex].notes = notes
+      localStorage.setItem(STORAGE_KEYS.USER_FUNDS, JSON.stringify(userFunds))
+      console.log(`📝 更新基金 ${code} 备注`)
+      return true
+    }
+    
+    return false
+  } catch (error) {
+    console.error('更新基金备注失败:', error)
+    return false
+  }
+}
+
+/**
+ * 获取基金备注
+ */
+export function getFundNote(code: string): string | undefined {
+  try {
+    const userFunds = getUserFunds()
+    const fund = userFunds.find(fund => fund.code === code)
+    return fund?.notes
+  } catch (error) {
+    console.error('获取基金备注失败:', error)
+    return undefined
+  }
+}
+
 export default {
   searchFunds,
   getFundDetail,
@@ -780,5 +816,7 @@ export default {
   getSearchHistory,
   clearSearchHistory,
   exportUserFunds,
-  importUserFunds
+  importUserFunds,
+  updateFundNote,
+  getFundNote
 }

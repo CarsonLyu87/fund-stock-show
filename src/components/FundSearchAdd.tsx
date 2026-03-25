@@ -8,13 +8,13 @@ import {
   SearchOutlined, PlusOutlined, DeleteOutlined, 
   HistoryOutlined, ExportOutlined, ImportOutlined,
   StarOutlined, StarFilled, InfoCircleOutlined,
-  ReloadOutlined
+  ReloadOutlined, EditOutlined
 } from '@ant-design/icons'
 import type { FundSearchResult } from '../services/fundSearchService'
 import { 
   searchFunds, addFundToUserList, removeFundFromUserList, 
   getUserFunds, getSearchHistory, clearSearchHistory,
-  exportUserFunds, importUserFunds
+  exportUserFunds, importUserFunds, updateFundNote, getFundNote
 } from '../services/fundSearchService'
 
 const { Text } = Typography
@@ -39,6 +39,10 @@ const FundSearchAdd: React.FC<FundSearchAddProps> = ({
   const [importText, setImportText] = useState('')
   const [importLoading, setImportLoading] = useState(false)
   const [searchMode, setSearchMode] = useState<'code' | 'name'>('code') // 搜索模式：代码或名称
+  const [noteModalVisible, setNoteModalVisible] = useState(false)
+  const [noteFundCode, setNoteFundCode] = useState('')
+  const [noteText, setNoteText] = useState('')
+  const [noteLoading, setNoteLoading] = useState(false)
 
   // 加载搜索历史
   useEffect(() => {
@@ -198,6 +202,37 @@ const FundSearchAdd: React.FC<FundSearchAddProps> = ({
     }
   }
 
+  // 处理编辑备注
+  const handleEditNote = (fundCode: string, fundName: string) => {
+    setNoteFundCode(fundCode)
+    setNoteText(getFundNote(fundCode) || '')
+    setNoteModalVisible(true)
+  }
+
+  // 处理保存备注
+  const handleSaveNote = () => {
+    if (!noteFundCode) return
+    
+    setNoteLoading(true)
+    try {
+      const success = updateFundNote(noteFundCode, noteText.trim())
+      
+      if (success) {
+        message.success('备注已保存')
+        setUserFunds(getUserFunds())
+        setNoteModalVisible(false)
+        setNoteFundCode('')
+        setNoteText('')
+      } else {
+        message.error('保存备注失败')
+      }
+    } catch (error) {
+      message.error('保存备注失败')
+    } finally {
+      setNoteLoading(false)
+    }
+  }
+
   // 渲染基金类型标签
   const renderFundTypeTag = (type: string) => {
     const typeColors: Record<string, string> = {
@@ -221,24 +256,24 @@ const FundSearchAdd: React.FC<FundSearchAddProps> = ({
     <List.Item
       actions={[
         fund.isAdded ? (
-          <Tooltip title="已添加">
+          <Tooltip title="从关注列表移除">
             <Button 
-              type="text" 
+              type="primary" 
               danger 
               icon={<DeleteOutlined />}
               onClick={() => handleRemoveFund(fund.code, fund.name)}
             >
-              移除
+              已关注
             </Button>
           </Tooltip>
         ) : (
-          <Tooltip title="添加到我的基金">
+          <Tooltip title="添加到关注列表">
             <Button 
               type="primary" 
               icon={<PlusOutlined />}
               onClick={() => handleAddFund(fund)}
             >
-              添加
+              关注
             </Button>
           </Tooltip>
         )
@@ -422,30 +457,130 @@ const FundSearchAdd: React.FC<FundSearchAddProps> = ({
         </Space>
       </div>
 
-      {/* 用户基金统计 */}
-      <Alert
-        message={
+      {/* 用户基金列表 */}
+      <Card 
+        title={
           <Space>
-            <Text strong>我的基金</Text>
+            <Text strong>我的关注列表</Text>
             <Tag color="blue">{userFunds.length} 只</Tag>
-            <Button 
-              type="link" 
-              size="small" 
-              icon={<ReloadOutlined />}
-              onClick={() => {
-                setUserFunds(getUserFunds())
-                message.success('基金列表已刷新')
-              }}
-            >
-              刷新
-            </Button>
+            {userFunds.length > 0 && (
+              <Button 
+                type="link" 
+                size="small" 
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => {
+                  Modal.confirm({
+                    title: '确认清空',
+                    content: '确定要清空所有关注的基金吗？',
+                    okText: '清空',
+                    cancelText: '取消',
+                    okType: 'danger',
+                    onOk: () => {
+                      // 清空所有基金
+                      userFunds.forEach(fund => {
+                        removeFundFromUserList(fund.code)
+                      })
+                      setUserFunds([])
+                      setSearchResults(prev => 
+                        prev.map(item => ({ ...item, isAdded: false }))
+                      )
+                      message.success('已清空所有关注的基金')
+                      onFundsUpdated?.()
+                    }
+                  })
+                }}
+              >
+                清空全部
+              </Button>
+            )}
           </Space>
         }
-        type="info"
-        showIcon
-        icon={<InfoCircleOutlined />}
+        extra={
+          <Button 
+            type="link" 
+            size="small" 
+            icon={<ReloadOutlined />}
+            onClick={() => {
+              setUserFunds(getUserFunds())
+              message.success('基金列表已刷新')
+            }}
+          >
+            刷新
+          </Button>
+        }
         style={{ marginBottom: 16 }}
-      />
+      >
+        {userFunds.length > 0 ? (
+          <List
+            dataSource={userFunds}
+            renderItem={(fund) => (
+              <List.Item
+                actions={[
+                  <Tooltip title="编辑备注">
+                    <Button 
+                      type="text" 
+                      icon={<EditOutlined />}
+                      size="small"
+                      onClick={() => handleEditNote(fund.code, fund.name)}
+                    >
+                      备注
+                    </Button>
+                  </Tooltip>,
+                  <Tooltip title="从关注列表移除">
+                    <Button 
+                      type="text" 
+                      danger 
+                      icon={<DeleteOutlined />}
+                      size="small"
+                      onClick={() => handleRemoveFund(fund.code, fund.name)}
+                    >
+                      移除
+                    </Button>
+                  </Tooltip>
+                ]}
+              >
+                <List.Item.Meta
+                  avatar={
+                    <div style={{ textAlign: 'center', minWidth: 80 }}>
+                      <div style={{ fontSize: 16, fontWeight: 'bold', color: '#1890ff' }}>
+                        {fund.code}
+                      </div>
+                      <StarFilled style={{ color: '#faad14', fontSize: 12 }} />
+                    </div>
+                  }
+                  title={<Text strong>{fund.name}</Text>}
+                  description={
+                    <Text type="secondary">
+                      添加时间: {new Date(fund.addedAt).toLocaleString('zh-CN')}
+                      {fund.notes && (
+                        <>
+                          <br />
+                          备注: {fund.notes}
+                        </>
+                      )}
+                    </Text>
+                  }
+                />
+              </List.Item>
+            )}
+            rowKey="code"
+            style={{ maxHeight: 200, overflow: 'auto' }}
+          />
+        ) : (
+          <Empty
+            description={
+              <div>
+                <div>暂无关注的基金</div>
+                <Text type="secondary" style={{ fontSize: 12, marginTop: 8 }}>
+                  搜索基金并点击"添加"按钮添加到关注列表
+                </Text>
+              </div>
+            }
+            style={{ padding: '20px 0' }}
+          />
+        )}
+      </Card>
 
       {/* 搜索结果 */}
       {loading ? (
@@ -529,6 +664,40 @@ const FundSearchAdd: React.FC<FundSearchAddProps> = ({
           rows={8}
           style={{ fontFamily: 'monospace', fontSize: 12 }}
         />
+      </Modal>
+
+      {/* 备注编辑模态框 */}
+      <Modal
+        title="编辑基金备注"
+        open={noteModalVisible}
+        onOk={handleSaveNote}
+        onCancel={() => {
+          setNoteModalVisible(false)
+          setNoteFundCode('')
+          setNoteText('')
+        }}
+        okText="保存"
+        cancelText="取消"
+        confirmLoading={noteLoading}
+      >
+        <Alert
+          message="备注说明"
+          description="为基金添加个人备注，方便记忆和管理。"
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+        <Input.TextArea
+          placeholder="输入基金备注..."
+          value={noteText}
+          onChange={(e) => setNoteText(e.target.value)}
+          rows={4}
+          maxLength={200}
+          showCount
+        />
+        <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
+          提示：备注仅保存在本地浏览器中
+        </div>
       </Modal>
     </Card>
   )
