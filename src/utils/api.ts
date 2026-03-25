@@ -3,6 +3,7 @@ import type { Fund, StockData } from '../types'
 import { fetchRealFundData, fetchRealStockData, initDataService, getUpdateInfo, clearCache } from '../services/realDataService'
 import { fetchAccurateFundData, getFundDetail, getDataSourceStatus, clearFundCache } from '../services/accurateFundService'
 import { calculateFundValuationByPortfolio, calculateMultipleFundValuations, compareValuationMethods, getPortfolioServiceStatus } from '../services/fundPortfolioService'
+import { fetchFundsWithProxy, checkProxyHealth } from '../services/proxyApiService'
 
 // 重新导出数据服务函数
 export { initDataService, getUpdateInfo, clearCache }
@@ -32,13 +33,82 @@ export const getMarketStatus = () => {
 
 
 
-// 获取基金数据 - 使用准确数据服务（包含持仓估值）
+// 获取基金数据 - 优先使用代理服务器避免CORS问题
 export const fetchFundData = async (): Promise<Fund[]> => {
-  console.log('📊 获取基金数据（每15分钟更新，使用准确数据源 + 持仓估值）...')
+  console.log('📊 获取基金数据（优先使用代理服务器避免CORS）...')
+  
+  // 支持的基金代码列表
+  const SUPPORTED_FUNDS = [
+    '001714', '005827', '161725', '003095', '110022',
+    '519674', '260108', '000404', '000248', '001475'
+  ]
   
   try {
-    // 1. 首先获取准确数据（官方净值 + API估值）
-    console.log('🔍 步骤1: 获取准确基金数据...')
+    // 1. 首先尝试使用代理服务器
+    console.log('🔍 步骤1: 尝试使用代理服务器...')
+    try {
+      const proxyFunds = await fetchFundsWithProxy(SUPPORTED_FUNDS)
+      if (proxyFunds.length > 0) {
+        console.log(`✅ 通过代理获取 ${proxyFunds.length} 只基金数据`)
+        
+        // 对于支持持仓计算的基金，尝试获取持仓估值
+        const portfolioServiceStatus = getPortfolioServiceStatus()
+        const supportedPortfolioFunds = portfolioServiceStatus.supportedFunds
+        
+        if (supportedPortfolioFunds.length > 0) {
+          console.log('🔍 为支持持仓计算的基金添加持仓估值...')
+          
+          // 创建基础净值映射
+          const baseNetValues: Record<string, number> = {}
+          proxyFunds.forEach(fund => {
+            baseNetValues[fund.code] = fund.currentPrice
+          })
+          
+          // 批量计算持仓估值
+          const portfolioValuations = await calculateMultipleFundValuations(
+            supportedPortfolioFunds,
+            baseNetValues
+          )
+          
+          // 合并数据
+          const enhancedFunds = proxyFunds.map(fund => {
+            const portfolioValuation = portfolioValuations.find(v => v.fundCode === fund.code)
+            
+            if (portfolioValuation) {
+              return {
+                ...fund,
+                portfolioCalculatedValue: portfolioValuation.calculatedValue,
+                portfolioCalculatedChangePercent: portfolioValuation.calculatedChangePercent,
+                portfolioConfidence: portfolioValuation.confidence,
+                portfolioStockCount: portfolioValuation.stockDetails.length,
+                valuationDifference: fund.estimatedValue && fund.estimatedChangePercent
+                  ? Math.abs(portfolioValuation.calculatedChangePercent - fund.estimatedChangePercent)
+                  : 0,
+                dataSources: [...(fund.dataSources || []), 'portfolio_calculation']
+              } as Fund & {
+                portfolioCalculatedValue?: number
+                portfolioCalculatedChangePercent?: number
+                portfolioConfidence?: number
+                portfolioStockCount?: number
+                valuationDifference?: number
+              }
+            }
+            
+            return fund
+          })
+          
+          console.log(`📊 持仓估值覆盖: ${portfolioValuations.length}/${proxyFunds.length} 只基金`)
+          return enhancedFunds as Fund[]
+        }
+        
+        return proxyFunds
+      }
+    } catch (proxyError) {
+      console.warn('⚠️ 代理服务器获取失败，降级到直接API:', proxyError.message)
+    }
+    
+    // 2. 代理失败，降级到直接获取准确数据
+    console.log('🔍 步骤2: 降级到直接获取准确数据...')
     const accurateFunds = await fetchAccurateFundData()
     console.log(`📈 准确数据获取结果: ${accurateFunds.length} 只基金`)
     
@@ -262,6 +332,7 @@ export const getNextUpdateTime = (): string => {
 }
 
 // 实际API配置（用于连接真实数据源）
+// 使用代理服务器避免CORS问题
 const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || 'http://localhost:3001'
 
 export const api = axios.create({
