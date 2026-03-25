@@ -38,6 +38,7 @@ const FundSearchAdd: React.FC<FundSearchAddProps> = ({
   const [importModalVisible, setImportModalVisible] = useState(false)
   const [importText, setImportText] = useState('')
   const [importLoading, setImportLoading] = useState(false)
+  const [searchMode, setSearchMode] = useState<'code' | 'name'>('code') // 搜索模式：代码或名称
 
   // 加载搜索历史
   useEffect(() => {
@@ -49,13 +50,7 @@ const FundSearchAdd: React.FC<FundSearchAddProps> = ({
     const query = searchQuery.trim()
     
     if (!query) {
-      message.warning('请输入基金代码')
-      return
-    }
-
-    // 验证基金代码格式（6位数字）
-    if (!/^\d{6}$/.test(query)) {
-      message.warning('请输入6位数字基金代码')
+      message.warning('请输入基金代码或名称')
       return
     }
 
@@ -65,9 +60,14 @@ const FundSearchAdd: React.FC<FundSearchAddProps> = ({
       setSearchResults(results)
       
       if (results.length === 0) {
-        message.info(`未找到基金代码 ${query}`)
+        message.info(`未找到相关基金: ${query}`)
       } else {
-        message.success(`找到基金: ${results[0].name}`)
+        const exactMatch = results.find(r => r.code === query)
+        if (exactMatch) {
+          message.success(`找到基金: ${exactMatch.name}`)
+        } else {
+          message.success(`找到 ${results.length} 条相关结果`)
+        }
       }
     } catch (error) {
       message.error('搜索失败，请稍后重试')
@@ -352,9 +352,20 @@ const FundSearchAdd: React.FC<FundSearchAddProps> = ({
       {/* 搜索框 */}
       <Space.Compact style={{ width: '100%', marginBottom: 16 }}>
         <Input
-          placeholder="输入6位基金代码，如：005827"
+          placeholder={searchMode === 'code' 
+            ? "输入6位基金代码，如：005827" 
+            : "输入基金名称，如：易方达、白酒"}
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value.replace(/\D/g, '').slice(0, 6))}
+          onChange={(e) => {
+            const value = e.target.value
+            if (searchMode === 'code') {
+              // 代码模式：只允许数字，最多6位
+              setSearchQuery(value.replace(/\D/g, '').slice(0, 6))
+            } else {
+              // 名称模式：允许任何字符
+              setSearchQuery(value)
+            }
+          }}
           onPressEnter={handleSearch}
           size="large"
           allowClear
@@ -367,6 +378,18 @@ const FundSearchAdd: React.FC<FundSearchAddProps> = ({
           loading={loading}
         >
           搜索
+        </Button>
+        <Button 
+          type={searchMode === 'code' ? 'primary' : 'default'}
+          onClick={() => {
+            const newMode = searchMode === 'code' ? 'name' : 'code'
+            setSearchMode(newMode)
+            setSearchQuery('')
+            message.info(`切换到${newMode === 'code' ? '代码' : '名称'}搜索模式`)
+          }}
+          size="large"
+        >
+          {searchMode === 'code' ? '🔢 代码' : '📝 名称'}
         </Button>
       </Space.Compact>
 
@@ -448,9 +471,14 @@ const FundSearchAdd: React.FC<FundSearchAddProps> = ({
         <Empty
           description={
             <div>
-              <div>未找到基金代码 {searchQuery}</div>
+              <div>未找到相关基金: {searchQuery}</div>
               <Text type="secondary" style={{ fontSize: 12, marginTop: 8 }}>
-                请确认基金代码是否正确，或尝试热门基金代码
+                请尝试：
+                <ul style={{ margin: '4px 0', paddingLeft: 16 }}>
+                  <li>确认基金代码是否正确（6位数字）</li>
+                  <li>使用基金名称搜索（如：易方达、白酒）</li>
+                  <li>点击下方热门基金快捷按钮</li>
+                </ul>
               </Text>
             </div>
           }
@@ -460,9 +488,13 @@ const FundSearchAdd: React.FC<FundSearchAddProps> = ({
         <Empty
           description={
             <div>
-              <div>输入6位基金代码搜索</div>
+              <div>输入基金代码或名称搜索</div>
               <Text type="secondary" style={{ fontSize: 12, marginTop: 8 }}>
-                示例：005827 (易方达蓝筹精选混合)
+                示例：
+                <ul style={{ margin: '4px 0', paddingLeft: 16 }}>
+                  <li>代码：005827 (易方达蓝筹精选混合)</li>
+                  <li>名称：易方达、白酒、医疗、新能源</li>
+                </ul>
               </Text>
             </div>
           }

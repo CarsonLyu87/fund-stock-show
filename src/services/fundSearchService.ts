@@ -71,42 +71,44 @@ const STORAGE_KEYS = {
 }
 
 /**
- * 按基金代码搜索基金
+ * 搜索基金（支持代码精确搜索和名称模糊搜索）
  */
 export async function searchFunds(keyword: string): Promise<FundSearchResult[]> {
   if (!keyword.trim()) {
     return []
   }
   
-  console.log(`🔍 按代码搜索基金: ${keyword}`)
+  console.log(`🔍 搜索基金: ${keyword}`)
   
   try {
     // 获取用户已添加的基金列表
     const userFunds = getUserFunds()
     const userFundCodes = new Set(userFunds.map(fund => fund.code))
     
-    // 清理输入：移除空格，只保留数字
-    const cleanCode = keyword.trim().replace(/\s+/g, '')
+    // 清理输入
+    const cleanKeyword = keyword.trim()
     
-    // 如果是6位数字代码，直接获取基金详情
-    if (/^\d{6}$/.test(cleanCode)) {
-      console.log(`📊 按基金代码 ${cleanCode} 获取详情`)
-      const fundDetail = await getFundDetail(cleanCode)
+    // 策略1：如果是6位数字代码，优先尝试精确获取
+    if (/^\d{6}$/.test(cleanKeyword)) {
+      console.log(`📊 策略1: 按基金代码 ${cleanKeyword} 精确获取`)
+      const fundDetail = await getFundDetail(cleanKeyword)
       
       if (fundDetail) {
         // 保存搜索历史
-        saveSearchHistory(cleanCode)
+        saveSearchHistory(cleanKeyword)
         
         return [{
           ...fundDetail,
-          isAdded: userFundCodes.has(cleanCode)
+          isAdded: userFundCodes.has(cleanKeyword)
         }]
       }
+      
+      console.log(`⚠️ 代码 ${cleanKeyword} 精确获取失败，尝试模糊搜索`)
     }
     
-    // 如果直接获取详情失败，尝试搜索API
-    console.log(`🔍 尝试搜索基金: ${cleanCode}`)
-    const url = FUND_SEARCH_APIS.eastmoneySearch(cleanCode)
+    // 策略2：使用东方财富搜索API进行模糊搜索
+    console.log(`🔍 策略2: 使用搜索API进行模糊搜索`)
+    const url = FUND_SEARCH_APIS.eastmoneySearch(cleanKeyword)
     
     const response = await axios.get(url, {
       timeout: 8000,
@@ -115,8 +117,10 @@ export async function searchFunds(keyword: string): Promise<FundSearchResult[]> 
     
     const results = parseSearchResults(response.data, userFundCodes)
     
-    // 保存搜索历史
-    saveSearchHistory(cleanCode)
+    // 如果找到结果，保存搜索历史
+    if (results.length > 0) {
+      saveSearchHistory(cleanKeyword)
+    }
     
     return results
     
