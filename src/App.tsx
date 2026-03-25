@@ -1,99 +1,279 @@
 import { useState, useEffect } from 'react'
+import { Layout, Card, Row, Col, Statistic, Alert, Spin, Tag, Button } from 'antd'
+import { ArrowUpOutlined, ArrowDownOutlined, ReloadOutlined } from '@ant-design/icons'
 import './App.css'
 import FundTable from './components/FundTable'
 import StockChart from './components/StockChart'
-import Header from './components/Header'
-import { fetchFundData, fetchStockData } from './utils/api'
-import type { Fund, StockData } from './types'
+import SearchBar from './components/SearchBar'
+import type { Fund, StockData } from './types/index'
+import { fetchFundData, fetchStockData, initDataService, getMarketStatus, getLastUpdateTime } from './utils/api'
+
+const { Header, Content } = Layout
 
 function App() {
   const [funds, setFunds] = useState<Fund[]>([])
   const [stocks, setStocks] = useState<StockData[]>([])
   const [loading, setLoading] = useState(true)
-  const [lastUpdated, setLastUpdated] = useState<string>('')
+  const [error, setError] = useState<string | null>(null)
+  const [marketStatus, setMarketStatus] = useState({ isOpen: false, openTime: '', closeTime: '', nextOpenTime: '' })
+  const [lastUpdate, setLastUpdate] = useState<number>(0)
+  const [autoRefresh, setAutoRefresh] = useState(true)
+  const [refreshCount, setRefreshCount] = useState(0)
 
+  // 初始化数据服务
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true)
-        const [fundData, stockData] = await Promise.all([
-          fetchFundData(),
-          fetchStockData()
-        ])
-        setFunds(fundData)
-        setStocks(stockData)
-        setLastUpdated(new Date().toLocaleString('zh-CN'))
-      } catch (error) {
-        console.error('加载数据失败:', error)
-      } finally {
-        setLoading(false)
-      }
+    const dataService = initDataService()
+    
+    // 组件卸载时清理
+    return () => {
+      // 如果有清理方法，可以在这里调用
     }
-
-    loadData()
-    // 每30秒更新一次数据
-    const interval = setInterval(loadData, 30000)
-    return () => clearInterval(interval)
   }, [])
 
-  return (
-    <div className="app">
-      <Header lastUpdated={lastUpdated} />
+  // 加载数据
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      setError(null)
       
-      <main className="main-content">
-        <section className="overview-section">
-          <div className="stats-card">
-            <h3>📈 今日概览</h3>
-            <div className="stats-grid">
-              <div className="stat-item">
-                <span className="stat-label">监控基金</span>
-                <span className="stat-value">{funds.length} 只</span>
-              </div>
-              <div className="stat-item">
-                <span className="stat-label">上涨基金</span>
-                <span className="stat-value positive">
-                  {funds.filter(f => f.changePercent > 0).length} 只
-                </span>
-              </div>
-              <div className="stat-item">
-                <span className="stat-label">平均涨幅</span>
-                <span className="stat-value">
-                  {funds.length > 0 
-                    ? (funds.reduce((sum, f) => sum + f.changePercent, 0) / funds.length).toFixed(2) + '%'
-                    : '0.00%'
-                  }
-                </span>
-              </div>
-            </div>
-          </div>
-        </section>
+      const [fundsData, stocksData] = await Promise.all([
+        fetchFundData(),
+        fetchStockData()
+      ])
+      
+      setFunds(fundsData)
+      setStocks(stocksData)
+      setMarketStatus(getMarketStatus())
+      setLastUpdate(getLastUpdateTime())
+      setRefreshCount(prev => prev + 1)
+      
+    } catch (err) {
+      setError('加载数据失败，请检查网络连接')
+      console.error('加载数据失败:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
-        <div className="data-grid">
-          <div className="fund-section">
-            <h2>📊 基金实时行情</h2>
-            {loading ? (
-              <div className="loading">加载中...</div>
-            ) : (
-              <FundTable funds={funds} />
-            )}
-          </div>
+  // 初始加载
+  useEffect(() => {
+    loadData()
+  }, [])
 
-          <div className="chart-section">
-            <h2>📈 股票走势图</h2>
-            {loading ? (
-              <div className="loading">加载中...</div>
-            ) : (
-              <StockChart stocks={stocks} />
-            )}
+  // 自动刷新
+  useEffect(() => {
+    if (!autoRefresh) return
+    
+    const intervalId = setInterval(() => {
+      loadData()
+    }, 30000) // 每30秒刷新一次
+    
+    return () => clearInterval(intervalId)
+  }, [autoRefresh])
+
+  // 计算统计数据
+  const totalFunds = funds.length
+  const totalStocks = stocks.length
+  
+  const avgFundChange = funds.length > 0 
+    ? funds.reduce((sum, fund) => sum + fund.changePercent, 0) / funds.length 
+    : 0
+  
+  const avgStockChange = stocks.length > 0 
+    ? stocks.reduce((sum, stock) => sum + stock.changePercent, 0) / stocks.length 
+    : 0
+
+  const risingFunds = funds.filter(fund => fund.changePercent > 0).length
+  const risingStocks = stocks.filter(stock => stock.changePercent > 0).length
+
+  // 格式化时间
+  const formatTime = (timestamp: number) => {
+    return new Date(timestamp).toLocaleTimeString('zh-CN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    })
+  }
+
+  return (
+    <Layout className="app-layout">
+      <Header className="app-header">
+        <div className="header-content">
+          <h1>📈 基金股票实时看板</h1>
+          <div className="header-controls">
+            <Tag color={marketStatus.isOpen ? 'green' : 'red'}>
+              {marketStatus.isOpen ? '🟢 交易中' : '🔴 已闭市'}
+            </Tag>
+            <Tag color="blue">
+              更新: {lastUpdate ? formatTime(lastUpdate) : '--:--:--'}
+            </Tag>
+            <Button 
+              icon={<ReloadOutlined />} 
+              onClick={loadData}
+              loading={loading}
+              size="small"
+            >
+              刷新
+            </Button>
+            <Button 
+              type={autoRefresh ? 'primary' : 'default'}
+              onClick={() => setAutoRefresh(!autoRefresh)}
+              size="small"
+            >
+              {autoRefresh ? '🔄 自动刷新中' : '⏸️ 暂停刷新'}
+            </Button>
+            <Tag color="cyan">刷新次数: {refreshCount}</Tag>
           </div>
         </div>
-      </main>
+      </Header>
 
-      <footer className="footer">
-        <p>数据更新时间: {lastUpdated || '正在加载...'}</p>
-        <p>© 2026 基金股票展示系统 | 数据仅供参考，投资需谨慎</p>
-      </footer>
-    </div>
+      <Content className="app-content">
+        {error && (
+          <Alert
+            message="数据加载错误"
+            description={error}
+            type="error"
+            showIcon
+            closable
+            onClose={() => setError(null)}
+            style={{ marginBottom: 16 }}
+          />
+        )}
+
+        {/* 市场状态提示 */}
+        {!marketStatus.isOpen && (
+          <Alert
+            message="市场已闭市"
+            description={`当前为闭市时间，数据为模拟更新。开市时间：${marketStatus.openTime} - ${marketStatus.closeTime}`}
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+        )}
+
+        {/* 统计数据 */}
+        <Row gutter={16} style={{ marginBottom: 16 }}>
+          <Col span={6}>
+            <Card>
+              <Statistic
+                title="基金总数"
+                value={totalFunds}
+                valueStyle={{ color: '#1890ff' }}
+                prefix="💰"
+              />
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card>
+              <Statistic
+                title="平均涨跌"
+                value={avgFundChange}
+                precision={2}
+                valueStyle={{ color: avgFundChange >= 0 ? '#3f8600' : '#cf1322' }}
+                prefix={avgFundChange >= 0 ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
+                suffix="%"
+              />
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card>
+              <Statistic
+                title="股票总数"
+                value={totalStocks}
+                valueStyle={{ color: '#1890ff' }}
+                prefix="📊"
+              />
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card>
+              <Statistic
+                title="平均涨跌"
+                value={avgStockChange}
+                precision={2}
+                valueStyle={{ color: avgStockChange >= 0 ? '#3f8600' : '#cf1322' }}
+                prefix={avgStockChange >= 0 ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
+                suffix="%"
+              />
+            </Card>
+          </Col>
+        </Row>
+
+        <Row gutter={16} style={{ marginBottom: 16 }}>
+          <Col span={12}>
+            <Card title={`📈 上涨基金 (${risingFunds}/${totalFunds})`}>
+              <div style={{ fontSize: 24, textAlign: 'center' }}>
+                <span style={{ color: '#3f8600' }}>{risingFunds}</span>
+                <span style={{ fontSize: 14, color: '#666', marginLeft: 8 }}>
+                  ({((risingFunds / totalFunds) * 100).toFixed(1)}%)
+                </span>
+              </div>
+            </Card>
+          </Col>
+          <Col span={12}>
+            <Card title={`📈 上涨股票 (${risingStocks}/${totalStocks})`}>
+              <div style={{ fontSize: 24, textAlign: 'center' }}>
+                <span style={{ color: '#3f8600' }}>{risingStocks}</span>
+                <span style={{ fontSize: 14, color: '#666', marginLeft: 8 }}>
+                  ({((risingStocks / totalStocks) * 100).toFixed(1)}%)
+                </span>
+              </div>
+            </Card>
+          </Col>
+        </Row>
+
+        {/* 搜索栏 */}
+        <div style={{ marginBottom: 16 }}>
+          <SearchBar onSearch={() => {}} />
+        </div>
+
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '50px' }}>
+            <Spin size="large" tip="加载实时数据中..." />
+          </div>
+        ) : (
+          <>
+            {/* 基金表格 */}
+            <div style={{ marginBottom: 24 }}>
+              <Card 
+                title={`💰 基金列表 (${funds.length})`}
+                extra={
+                  <span style={{ fontSize: 12, color: '#666' }}>
+                    最后更新: {lastUpdate ? formatTime(lastUpdate) : '--:--:--'}
+                  </span>
+                }
+              >
+                <FundTable funds={funds} />
+              </Card>
+            </div>
+
+            {/* 股票图表 */}
+            <div style={{ marginBottom: 24 }}>
+              <Card 
+                title={`📊 股票走势 (${stocks.length})`}
+                extra={
+                  <span style={{ fontSize: 12, color: '#666' }}>
+                    实时更新中...
+                  </span>
+                }
+              >
+                <StockChart stocks={stocks} />
+              </Card>
+            </div>
+          </>
+        )}
+
+        {/* 页脚信息 */}
+        <div style={{ textAlign: 'center', marginTop: 24, color: '#666', fontSize: 12 }}>
+          <p>
+            💡 数据每30秒自动更新一次 | 
+            {marketStatus.isOpen ? ' 🟢 实时市场数据' : ' ⚠️ 闭市时间模拟数据'} |
+            最后刷新: {refreshCount} 次
+          </p>
+          <p>基金数据来源: 东方财富网 | 股票数据来源: Yahoo Finance</p>
+        </div>
+      </Content>
+    </Layout>
   )
 }
 
