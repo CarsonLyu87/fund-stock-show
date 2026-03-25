@@ -311,29 +311,44 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload })
       key: 'code',
       width: 100,
       render: (code: string) => (
-        <Text strong style={{ color: '#1890ff' }}>{code}</Text>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Text strong style={{ color: '#1890ff' }}>{code}</Text>
+          {userFunds.some(f => f.code === code) && (
+            <StarFilled style={{ color: '#faad14', fontSize: 12 }} />
+          )}
+        </div>
       )
     },
     {
       title: '基金名称',
       dataIndex: 'name',
       key: 'name',
-      width: 200,
-      render: (name: string, record: Fund) => (
-        <Space direction="vertical" size={2}>
-          <Text strong>{name}</Text>
-          <Space wrap>
-            {renderFundTypeTag(record.type)}
-            <Tag color="geekblue">{record.company}</Tag>
+      width: 220,
+      render: (name: string, record: Fund) => {
+        const userFund = userFunds.find(f => f.code === record.code)
+        return (
+          <Space direction="vertical" size={2}>
+            <Text strong>{name}</Text>
+            <Space wrap>
+              {renderFundTypeTag(record.type)}
+              <Tag color="geekblue">{record.company}</Tag>
+            </Space>
+            {userFund?.notes && (
+              <div style={{ fontSize: 12, color: '#666', maxWidth: 200 }}>
+                <Text type="secondary" ellipsis={{ tooltip: userFund.notes }}>
+                  备注: {userFund.notes}
+                </Text>
+              </div>
+            )}
           </Space>
-        </Space>
-      )
+        )
+      }
     },
     {
       title: '单位净值',
       dataIndex: 'netValue',
       key: 'netValue',
-      width: 120,
+      width: 100,
       render: (value: number) => (
         <Text strong>¥{value?.toFixed(4) || '--'}</Text>
       )
@@ -342,14 +357,14 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload })
       title: '涨跌幅',
       dataIndex: 'changePercent',
       key: 'changePercent',
-      width: 120,
+      width: 100,
       render: renderChangePercent
     },
     {
       title: '持仓估值',
       dataIndex: 'portfolioValue',
       key: 'portfolioValue',
-      width: 120,
+      width: 100,
       render: (value: number) => (
         <Text type="secondary">¥{value?.toFixed(4) || '--'}</Text>
       )
@@ -358,7 +373,7 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload })
       title: '更新时间',
       dataIndex: 'updateTime',
       key: 'updateTime',
-      width: 120,
+      width: 100,
       render: (time: string) => (
         <Text type="secondary">{time || '--:--'}</Text>
       )
@@ -366,7 +381,7 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload })
     {
       title: '操作',
       key: 'action',
-      width: 150,
+      width: 120,
       render: (_: any, record: Fund) => {
         const isAdded = userFunds.some(fund => fund.code === record.code)
         
@@ -397,16 +412,6 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload })
                 {isAdded ? '已关注' : '关注'}
               </Button>
             </Tooltip>
-            {isAdded && (
-              <Tooltip title="编辑备注">
-                <Button
-                  type="text"
-                  icon={<EditOutlined />}
-                  size="small"
-                  onClick={() => handleEditNote(record.code, record.name)}
-                />
-              </Tooltip>
-            )}
           </Space>
         )
       }
@@ -480,18 +485,6 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload })
           >
             导入
           </Button>
-          <Button 
-            type="text" 
-            icon={<ReloadOutlined />} 
-            onClick={loadFundData}
-            loading={fundsLoading}
-            size="small"
-          >
-            刷新
-          </Button>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            更新: {lastUpdate}
-          </Text>
         </Space>
       }
       style={{ marginBottom: 24 }}
@@ -656,58 +649,14 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload })
         </div>
       )}
 
-      {/* 基金监控表格 */}
-      <div style={{ marginBottom: 24 }}>
-        <Divider orientation="left">
-          <Text strong>📊 基金监控列表</Text>
-        </Divider>
-        
-        {fundsLoading ? (
-          <div style={{ textAlign: 'center', padding: '40px 0' }}>
-            <Spin size="large" tip="加载基金数据中..." />
-          </div>
-        ) : funds.length > 0 ? (
-          <>
-            <Alert
-              message="操作说明"
-              description="点击'关注'按钮添加基金到监控列表，点击'已关注'按钮从列表中移除。已关注的基金会持续监控并显示实时数据。"
-              type="info"
-              showIcon
-              style={{ marginBottom: 16 }}
-            />
-            
-            <Table
-              dataSource={funds}
-              columns={columns}
-              rowKey="code"
-              pagination={{ pageSize: 10 }}
-              size="middle"
-              scroll={{ x: 800 }}
-              loading={fundsLoading}
-            />
-          </>
-        ) : (
-          <Empty
-            description={
-              <div>
-                <div>暂无基金数据</div>
-                <Text type="secondary" style={{ fontSize: 12, marginTop: 8 }}>
-                  请先搜索并添加基金到关注列表
-                </Text>
-              </div>
-            }
-            style={{ padding: '40px 0' }}
-          />
-        )}
-      </div>
-
-      {/* 关注列表 */}
+      {/* 统一的基金监控与关注列表 */}
       <div style={{ marginBottom: 24 }}>
         <Card 
           title={
             <Space>
-              <Text strong>⭐ 我的关注列表</Text>
-              <Tag color="blue">{userFunds.length} 只</Tag>
+              <Text strong>⭐ 我的基金监控列表</Text>
+              <Tag color="blue">{funds.length} 只</Tag>
+              <Tag color="green">{userFunds.length} 只关注</Tag>
               {userFunds.length > 0 && (
                 <Button 
                   type="link" 
@@ -747,86 +696,119 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload })
             </Space>
           }
           extra={
-            <Button 
-              type="link" 
-              size="small" 
-              icon={<ReloadOutlined />}
-              onClick={() => {
-                loadUserFunds()
-                message.success('基金列表已刷新')
-              }}
-            >
-              刷新
-            </Button>
+            <Space>
+              <Button 
+                type="link" 
+                size="small" 
+                icon={<ReloadOutlined />}
+                onClick={() => {
+                  loadUserFunds()
+                  loadFundData()
+                  message.success('基金列表已刷新')
+                }}
+              >
+                刷新
+              </Button>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                更新: {lastUpdate}
+              </Text>
+            </Space>
           }
         >
-          {userFunds.length > 0 ? (
-            <List
-              dataSource={userFunds}
-              renderItem={(fund) => (
-                <List.Item
-                  actions={[
-                    <Tooltip title="编辑备注">
-                      <Button 
-                        type="text" 
-                        icon={<EditOutlined />}
-                        size="small"
-                        onClick={() => handleEditNote(fund.code, fund.name)}
-                      >
-                        备注
-                      </Button>
-                    </Tooltip>,
-                    <Tooltip title="从关注列表移除">
-                      <Button 
-                        type="text" 
-                        danger 
-                        icon={<DeleteOutlined />}
-                        size="small"
-                        onClick={() => handleRemoveFund(fund.code, fund.name)}
-                      >
-                        移除
-                      </Button>
-                    </Tooltip>
-                  ]}
-                >
-                  <List.Item.Meta
-                    avatar={
-                      <div style={{ textAlign: 'center', minWidth: 80 }}>
-                        <div style={{ fontSize: 16, fontWeight: 'bold', color: '#1890ff' }}>
-                          {fund.code}
-                        </div>
-                        <StarFilled style={{ color: '#faad14', fontSize: 12 }} />
+          {fundsLoading ? (
+            <div style={{ textAlign: 'center', padding: '40px 0' }}>
+              <Spin size="large" tip="加载基金数据中..." />
+            </div>
+          ) : funds.length > 0 ? (
+            <>
+              <Alert
+                message="操作说明"
+                description="此列表显示所有你关注的基金。点击'关注'按钮添加新基金，点击'已关注'按钮从列表中移除。已关注的基金会持续监控并显示实时数据。"
+                type="info"
+                showIcon
+                style={{ marginBottom: 16 }}
+              />
+              
+              <Table
+                dataSource={funds}
+                columns={columns}
+                rowKey="code"
+                pagination={{ pageSize: 10 }}
+                size="middle"
+                scroll={{ x: 800 }}
+                loading={fundsLoading}
+                expandable={{
+                  expandedRowRender: (record: Fund) => {
+                    const userFund = userFunds.find(f => f.code === record.code)
+                    return (
+                      <div style={{ padding: '16px 24px', background: '#fafafa' }}>
+                        <Row gutter={16}>
+                          <Col span={12}>
+                            <div style={{ marginBottom: 8 }}>
+                              <Text strong>基金信息:</Text>
+                            </div>
+                            <div>
+                              <Text type="secondary">基金代码: </Text>
+                              <Text strong>{record.code}</Text>
+                            </div>
+                            <div>
+                              <Text type="secondary">基金类型: </Text>
+                              <Tag color="blue">{record.type}</Tag>
+                            </div>
+                            <div>
+                              <Text type="secondary">基金公司: </Text>
+                              <Text strong>{record.company}</Text>
+                            </div>
+                            {userFund?.addedAt && (
+                              <div>
+                                <Text type="secondary">关注时间: </Text>
+                                <Text>{new Date(userFund.addedAt).toLocaleString('zh-CN')}</Text>
+                              </div>
+                            )}
+                          </Col>
+                          <Col span={12}>
+                            <div style={{ marginBottom: 8 }}>
+                              <Text strong>个人备注:</Text>
+                            </div>
+                            {userFund?.notes ? (
+                              <div style={{ background: '#fff', padding: 12, borderRadius: 4, border: '1px solid #d9d9d9' }}>
+                                <Text>{userFund.notes}</Text>
+                              </div>
+                            ) : (
+                              <div style={{ color: '#999', fontStyle: 'italic' }}>
+                                暂无备注
+                              </div>
+                            )}
+                            <div style={{ marginTop: 12 }}>
+                              <Button 
+                                type="link" 
+                                size="small" 
+                                icon={<EditOutlined />}
+                                onClick={() => handleEditNote(record.code, record.name)}
+                              >
+                                编辑备注
+                              </Button>
+                            </div>
+                          </Col>
+                        </Row>
                       </div>
-                    }
-                    title={<Text strong>{fund.name}</Text>}
-                    description={
-                      <Text type="secondary">
-                        添加时间: {new Date(fund.addedAt).toLocaleString('zh-CN')}
-                        {fund.notes && (
-                          <>
-                            <br />
-                            备注: {fund.notes}
-                          </>
-                        )}
-                      </Text>
-                    }
-                  />
-                </List.Item>
-              )}
-              rowKey="code"
-              style={{ maxHeight: 200, overflow: 'auto' }}
-            />
+                    )
+                  },
+                  rowExpandable: (record: Fund) => true
+                }}
+              />
+            </>
           ) : (
             <Empty
               description={
                 <div>
                   <div>暂无关注的基金</div>
                   <Text type="secondary" style={{ fontSize: 12, marginTop: 8 }}>
-                    搜索基金并点击"关注"按钮添加到关注列表
+                    请先搜索并添加基金到关注列表
                   </Text>
                 </div>
               }
-              style={{ padding: '20px 0' }}
+              style={{ padding: '40px 0' }}
             />
           )}
         </Card>
