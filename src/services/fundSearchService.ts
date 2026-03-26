@@ -9,7 +9,7 @@ import axios from 'axios'
 const PROXY_BASE_URL = import.meta.env.VITE_PROXY_URL || 'http://localhost:3001'
 
 // JSONP工具函数（仅在浏览器环境中使用）
-function createJsonpPromise<T>(url: string, callbackParam: string = 'callback'): Promise<T> {
+function createJsonpPromise<T>(url: string, callbackParam: string = 'callback', expectedCallbackName?: string): Promise<T> {
   return new Promise((resolve, reject) => {
     // 检查是否在浏览器环境
     if (typeof window === 'undefined' || typeof document === 'undefined') {
@@ -18,7 +18,7 @@ function createJsonpPromise<T>(url: string, callbackParam: string = 'callback'):
     }
     
     // 创建唯一的回调函数名
-    const callbackName = `jsonp_callback_${Date.now()}_${Math.random().toString(36).substr(2)}`
+    const callbackName = expectedCallbackName || `jsonp_callback_${Date.now()}_${Math.random().toString(36).substr(2)}`
     
     // 创建script标签
     const script = document.createElement('script')
@@ -47,14 +47,66 @@ function createJsonpPromise<T>(url: string, callbackParam: string = 'callback'):
     }
     
     // 构建URL
-    const separator = url.includes('?') ? '&' : '?'
-    const jsonpUrl = `${url}${separator}${callbackParam}=${callbackName}`
+    let jsonpUrl = url
+    if (callbackParam && !url.includes('callback=')) {
+      const separator = url.includes('?') ? '&' : '?'
+      jsonpUrl = `${url}${separator}${callbackParam}=${callbackName}`
+    }
     
     // 设置script属性
     script.src = jsonpUrl
     script.onerror = () => {
       cleanup()
       reject(new Error('JSONP请求失败'))
+    }
+    
+    // 添加到文档
+    document.head.appendChild(script)
+  })
+}
+
+// 天天基金专用JSONP函数（使用固定的jsonpgz回调名）
+function createTiantianJsonpPromise<T>(url: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      reject(new Error('JSONP只能在浏览器环境中使用'))
+      return
+    }
+    
+    // 天天基金使用固定的回调函数名 jsonpgz
+    const callbackName = 'jsonpgz'
+    
+    // 创建script标签
+    const script = document.createElement('script')
+    
+    // 设置超时
+    const timeoutId = setTimeout(() => {
+      cleanup()
+      reject(new Error('天天基金JSONP请求超时'))
+    }, 8000)
+    
+    // 清理函数
+    const cleanup = () => {
+      clearTimeout(timeoutId)
+      if (script.parentNode) {
+        script.parentNode.removeChild(script)
+      }
+      // @ts-ignore
+      delete window[callbackName]
+    }
+    
+    // 定义回调函数
+    // @ts-ignore
+    window[callbackName] = (data: T) => {
+      cleanup()
+      resolve(data)
+    }
+    
+    // 设置script属性
+    script.src = url
+    script.onerror = () => {
+      cleanup()
+      reject(new Error('天天基金JSONP请求失败'))
     }
     
     // 添加到文档
@@ -386,8 +438,8 @@ async function fetchFundDetailFromTiantian(code: string): Promise<FundSearchResu
     
     // 在浏览器环境中使用JSONP，在Node.js环境中使用axios
     if (isBrowser) {
-      // 使用JSONP获取数据
-      const jsonpData = await createJsonpPromise<any>(url, 'callback')
+      // 使用专门的天天基金JSONP函数（使用固定的jsonpgz回调名）
+      const jsonpData = await createTiantianJsonpPromise<any>(url)
       
       if (jsonpData && jsonpData.fundcode) {
         const userFunds = getUserFunds()
@@ -435,6 +487,7 @@ async function fetchFundDetailFromTiantian(code: string): Promise<FundSearchResu
     }
     
   } catch (error) {
+    console.warn(`天天基金API失败: ${error.message}`)
     throw new Error(`天天基金API失败: ${error.message}`)
   }
   

@@ -65,14 +65,17 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload, o
 
   // 加载基金数据
   const loadFundData = async () => {
+    console.log('🔄 UnifiedFundManager: 开始加载基金数据...')
     setFundsLoading(true)
     try {
       const data = await fetchFundData()
+      console.log(`✅ UnifiedFundManager: 加载完成，获取 ${data.length} 只基金数据`)
+      console.log('📊 基金列表:', data.map(f => `${f.code}: ${f.name}`))
       setFunds(data)
       setLastUpdate(new Date().toLocaleTimeString('zh-CN'))
     } catch (error) {
       message.error('加载基金数据失败')
-      console.error('加载基金数据失败:', error)
+      console.error('❌ UnifiedFundManager: 加载基金数据失败:', error)
     } finally {
       setFundsLoading(false)
     }
