@@ -78,7 +78,58 @@ class AccurateFundCache {
 const fundCache = new AccurateFundCache()
 
 /**
- * 使用CORS代理获取数据
+ * 使用JSONP获取数据（无CORS问题）
+ */
+async function fetchWithJsonp(url: string): Promise<any> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      reject(new Error('JSONP只能在浏览器环境中使用'))
+      return
+    }
+    
+    // 生成唯一的回调函数名
+    const callbackName = `jsonp_callback_${Date.now()}_${Math.random().toString(36).substr(2)}`
+    
+    // 创建script标签
+    const script = document.createElement('script')
+    
+    // 设置超时
+    const timeoutId = setTimeout(() => {
+      cleanup()
+      reject(new Error('JSONP请求超时'))
+    }, 8000)
+    
+    // 清理函数
+    const cleanup = () => {
+      clearTimeout(timeoutId)
+      if (script.parentNode) {
+        script.parentNode.removeChild(script)
+      }
+      // @ts-ignore
+      delete window[callbackName]
+    }
+    
+    // 定义回调函数
+    // @ts-ignore
+    window[callbackName] = (data: any) => {
+      cleanup()
+      resolve(data)
+    }
+    
+    // 设置script属性
+    script.src = `${url}${url.includes('?') ? '&' : '?'}callback=${callbackName}`
+    script.onerror = () => {
+      cleanup()
+      reject(new Error('JSONP脚本加载失败'))
+    }
+    
+    // 添加到文档
+    document.head.appendChild(script)
+  })
+}
+
+/**
+ * 使用CORS代理获取数据（备用方案）
  */
 async function fetchWithCorsProxy(url: string, options: any = {}): Promise<any> {
   const corsProxies = [
@@ -87,17 +138,19 @@ async function fetchWithCorsProxy(url: string, options: any = {}): Promise<any> 
     `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
   ]
   
+  // 简化请求头，避免CORS预检问题
+  const simpleHeaders = {
+    'Accept': 'application/json'
+    // 移除可能引起CORS预检的头部：Cache-Control, Content-Type等
+  }
+  
   for (let i = 0; i < corsProxies.length; i++) {
     try {
       console.log(`尝试CORS代理 ${i + 1}: ${corsProxies[i].substring(0, 60)}...`)
       
       const response = await axios.get(corsProxies[i], {
         timeout: 10000,
-        headers: {
-          'Accept': 'application/json',
-          'Cache-Control': 'no-cache',
-          ...options.headers
-        },
+        headers: simpleHeaders,
         ...options
       })
       
@@ -113,73 +166,135 @@ async function fetchWithCorsProxy(url: string, options: any = {}): Promise<any> 
 }
 
 /**
- * 从东方财富API解析基金净值数据（支持CORS代理）
+ * 从天天基金JSONP API获取基金实时估值数据（无CORS问题）
  */
-async function parseEastmoneyNetValue(code: string, name: string): Promise<Fund | null> {
+async function parseTiantianFundData(code: string, name: string): Promise<Fund | null> {
   try {
-    const url = FUND_DATA_SOURCES.eastmoneyNetValue(code)
-    console.log(`获取基金 ${code} 净值数据: ${url}`)
+    console.log(`获取天天基金实时估值: ${code} ${name}`)
     
-    let data: any
+    const url = FUND_DATA_SOURCES.tiantianEstimate(code)
+    console.log(`请求URL: ${url}`)
     
-    // 首先尝试直接请求
+    let jsonpData: any
+    
+    // 方法1: 使用专门的JSONP函数（从fundSearchService导入）
     try {
-      const response = await axios.get(url, {
-        timeout: 8000,
-        headers: getFundApiHeaders()
-      })
-      data = response.data
-      console.log(`✅ 直接请求成功`)
-    } catch (directError) {
-      console.warn(`直接请求失败（可能是CORS）: ${directError.message}`)
+      // 动态导入以避免循环依赖
+      const { createTiantianJsonpPromise } = await import('./fundSearchService')
+      jsonpData = await createTiantianJsonpPromise<any>(url)
+      console.log(`✅ JSONP方式成功`)
+    } catch (jsonpError) {
+      console.warn(`JSONP方式失败: ${jsonpError.message}`)
       
-      // 使用CORS代理
+      // 方法2: 尝试直接请求（可能有CORS，但天天基金API通常支持）
       try {
-        data = await fetchWithCorsProxy(url, {
+        const response = await axios.get(url, {
+          timeout: 5000,
           headers: getFundApiHeaders()
         })
-        console.log(`✅ CORS代理请求成功`)
-      } catch (proxyError) {
-        console.error(`CORS代理也失败: ${proxyError.message}`)
+        
+        // 解析JSONP响应
+        const jsonStr = response.data.replace(/^jsonpgz\(/, '').replace(/\);$/, '')
+        jsonpData = JSON.parse(jsonStr)
+        console.log(`✅ 直接请求成功`)
+      } catch (directError) {
+        console.warn(`直接请求失败: ${directError.message}`)
         return null
       }
     }
-
-    if (data.ErrCode !== 0 || !data.Data || !data.Data.LSJZList || data.Data.LSJZList.length === 0) {
-      console.warn(`基金 ${code} 无净值数据`)
+    
+    if (jsonpData && jsonpData.fundcode === code) {
+      // 天天基金返回的是实时估值数据
+      const currentPrice = parseFloat(jsonpData.dwjz) || 0 // 单位净值
+      const changePercent = parseFloat(jsonpData.gszzl) || 0 // 估算涨跌幅
+      const estimatedValue = parseFloat(jsonpData.gsz) || currentPrice // 估算净值
+      
+      return {
+        id: `fund_${code}`,
+        name: jsonpData.name || name,
+        code: code,
+        currentPrice: currentPrice,
+        changeAmount: 0, // 天天基金不提供变化金额
+        changePercent: changePercent,
+        accumulatedValue: currentPrice, // 天天基金不提供累计净值
+        volume: Math.floor(Math.random() * 50000000) + 10000000, // 模拟成交量
+        timestamp: jsonpData.gztime || new Date().toISOString(), // 估值时间
+        netValueDate: jsonpData.gztime ? jsonpData.gztime.split(' ')[0] : new Date().toISOString().split('T')[0],
+        estimatedValue: estimatedValue,
+        estimatedChangePercent: changePercent,
+        source: 'tiantian',
+        accuracy: 'estimate'
+      }
+    } else {
+      console.warn(`天天基金 ${code} 数据格式错误`)
       return null
     }
-
-    const latestData = data.Data.LSJZList[0]
-    const previousData = data.Data.LSJZList[1] || latestData
     
-    // 计算涨跌幅
-    const currentNetValue = parseFloat(latestData.DWJZ) // 单位净值
-    const previousNetValue = parseFloat(previousData.DWJZ)
-    const changeAmount = currentNetValue - previousNetValue
-    const changePercent = previousNetValue > 0 ? (changeAmount / previousNetValue) * 100 : 0
-    
-    // 获取累计净值
-    const accumulatedValue = parseFloat(latestData.LJJZ) || currentNetValue
-
-    return {
-      id: `fund_${code}`,
-      name: name,
-      code: code,
-      currentPrice: currentNetValue,
-      changeAmount: parseFloat(changeAmount.toFixed(4)),
-      changePercent: parseFloat(changePercent.toFixed(2)),
-      accumulatedValue: accumulatedValue,
-      volume: Math.floor(Math.random() * 50000000) + 10000000, // 模拟成交量
-      timestamp: latestData.FSRQ, // 净值日期
-      netValueDate: latestData.FSRQ,
-      estimatedValue: 0, // 实时估值（需要从其他API获取）
-      estimatedChangePercent: 0,
-    }
   } catch (error) {
-    console.error(`解析东方财富基金 ${code} 数据失败:`, error)
+    console.error(`获取天天基金 ${code} 数据失败:`, error)
     return null
   }
+}
+
+/**
+ * 获取基金数据（主函数，优先使用天天基金JSONP）
+ */
+async function parseFundData(code: string, name: string): Promise<Fund | null> {
+  // 优先使用天天基金JSONP API（无CORS问题）
+  const tiantianData = await parseTiantianFundData(code, name)
+  if (tiantianData) {
+    return tiantianData
+  }
+  
+  console.warn(`天天基金API失败，尝试东方财富API（可能有CORS问题）`)
+  
+  // 备用方案：尝试东方财富API（可能有CORS问题）
+  try {
+    const url = FUND_DATA_SOURCES.eastmoneyNetValue(code)
+    console.log(`尝试东方财富API: ${url}`)
+    
+    // 尝试CORS代理
+    try {
+      const data = await fetchWithCorsProxy(url, {
+        headers: getFundApiHeaders()
+      })
+      
+      if (data.ErrCode === 0 && data.Data?.LSJZList?.length > 0) {
+        const latestData = data.Data.LSJZList[0]
+        const previousData = data.Data.LSJZList[1] || latestData
+        
+        const currentNetValue = parseFloat(latestData.DWJZ)
+        const previousNetValue = parseFloat(previousData.DWJZ)
+        const changeAmount = currentNetValue - previousNetValue
+        const changePercent = previousNetValue > 0 ? (changeAmount / previousNetValue) * 100 : 0
+        
+        return {
+          id: `fund_${code}`,
+          name: name,
+          code: code,
+          currentPrice: currentNetValue,
+          changeAmount: parseFloat(changeAmount.toFixed(4)),
+          changePercent: parseFloat(changePercent.toFixed(2)),
+          accumulatedValue: parseFloat(latestData.LJJZ) || currentNetValue,
+          volume: Math.floor(Math.random() * 50000000) + 10000000,
+          timestamp: latestData.FSRQ,
+          netValueDate: latestData.FSRQ,
+          estimatedValue: 0,
+          estimatedChangePercent: 0,
+          source: 'eastmoney',
+          accuracy: 'official'
+        }
+      }
+    } catch (proxyError) {
+      console.warn(`东方财富CORS代理也失败: ${proxyError.message}`)
+    }
+  } catch (error) {
+    console.error(`东方财富API也失败:`, error)
+  }
+  
+  // 所有方法都失败，返回null
+  console.warn(`基金 ${code} 所有数据源都失败`)
+  return null
 }
 
 /**
@@ -271,34 +386,32 @@ export async function fetchAccurateFundData(): Promise<Fund[]> {
 
   for (const fundInfo of ACCURATE_FUNDS) {
     try {
-      // 1. 首先获取官方净值数据
-      const fundData = await parseEastmoneyNetValue(fundInfo.code, fundInfo.name)
+      // 使用新的parseFundData函数（优先使用天天基金JSONP）
+      const fundData = await parseFundData(fundInfo.code, fundInfo.name)
       
       if (fundData) {
-        // 2. 尝试获取实时估值数据（非必需）
-        try {
-          const estimate = await getFundEstimate(fundInfo.code)
-          if (estimate) {
-            fundData.estimatedValue = estimate.estimatedValue
-            fundData.estimatedChangePercent = estimate.estimatedChangePercent
-          }
-        } catch (estimateError) {
-          // 实时估值失败不影响主数据
-          console.warn(`基金 ${fundInfo.code} 实时估值获取失败，不影响净值数据`)
-        }
-
         funds.push(fundData)
-        console.log(`✓ 成功获取基金 ${fundInfo.code} (${fundInfo.name}) 数据`)
+        console.log(`✅ 成功获取基金 ${fundInfo.code} (${fundInfo.name}) 数据`)
+        console.log(`   净值: ${fundData.currentPrice}, 涨跌: ${fundData.changePercent}%, 来源: ${fundData.source || 'unknown'}`)
       } else {
-        errors.push(`基金 ${fundInfo.code} 净值数据获取失败`)
+        errors.push(`基金 ${fundInfo.code} 数据获取失败`)
+        console.warn(`⚠️ 基金 ${fundInfo.code} 数据获取失败，使用模拟数据`)
+        
+        // 使用模拟数据作为降级
+        const mockFund = generateMockFund(fundInfo.code, fundInfo.name)
+        funds.push(mockFund)
       }
 
-      // 避免请求过快
-      await new Promise(resolve => setTimeout(resolve, 300))
+      // 避免请求过快（天天基金API可能有限制）
+      await new Promise(resolve => setTimeout(resolve, 500))
       
     } catch (error) {
       console.error(`处理基金 ${fundInfo.code} 时出错:`, error)
       errors.push(`基金 ${fundInfo.code} 处理失败: ${error.message}`)
+      
+      // 出错时使用模拟数据
+      const mockFund = generateMockFund(fundInfo.code, fundInfo.name)
+      funds.push(mockFund)
     }
   }
 
@@ -330,7 +443,7 @@ export async function getFundDetail(code: string): Promise<Fund | null> {
     return null
   }
 
-  return await parseEastmoneyNetValue(code, fundInfo.name)
+  return await parseFundData(code, fundInfo.name)
 }
 
 /**
@@ -349,32 +462,39 @@ export function getDataSourceStatus(): {
 }
 
 /**
+ * 生成单个基金的模拟数据
+ */
+function generateMockFund(code: string, name: string): Fund {
+  const basePrice = 1.0 + Math.random() * 2
+  const changePercent = (Math.random() - 0.5) * 4 // -2% 到 +2%
+  const changeAmount = basePrice * changePercent / 100
+  
+  return {
+    id: `mock_${code}`,
+    name: name,
+    code: code,
+    currentPrice: parseFloat(basePrice.toFixed(4)),
+    changePercent: parseFloat(changePercent.toFixed(2)),
+    changeAmount: parseFloat(changeAmount.toFixed(4)),
+    volume: Math.floor(Math.random() * 50000000) + 10000000,
+    timestamp: new Date().toISOString(),
+    accumulatedValue: parseFloat((basePrice * 1.2).toFixed(4)),
+    netValueDate: new Date().toISOString().split('T')[0],
+    estimatedValue: parseFloat((basePrice * (1 + changePercent / 100)).toFixed(4)),
+    estimatedChangePercent: parseFloat(changePercent.toFixed(2)),
+    source: 'mock',
+    accuracy: 'simulated',
+    dataSources: ['mock_simulation']
+  }
+}
+
+/**
  * 生成降级用的基金数据
  */
 function generateFallbackFunds(): Fund[] {
   console.log('生成降级基金数据...')
   
-  return ACCURATE_FUNDS.map(fundInfo => {
-    const basePrice = 1.0 + Math.random() * 2
-    const changePercent = (Math.random() - 0.5) * 4 // -2% 到 +2%
-    const changeAmount = basePrice * changePercent / 100
-    
-    return {
-      id: `fallback_${fundInfo.code}`,
-      name: fundInfo.name,
-      code: fundInfo.code,
-      currentPrice: parseFloat(basePrice.toFixed(4)),
-      changePercent: parseFloat(changePercent.toFixed(2)),
-      changeAmount: parseFloat(changeAmount.toFixed(4)),
-      volume: Math.floor(Math.random() * 50000000) + 10000000,
-      timestamp: new Date().toISOString(),
-      accumulatedValue: parseFloat((basePrice * 1.2).toFixed(4)),
-      netValueDate: new Date().toISOString().split('T')[0],
-      estimatedValue: parseFloat((basePrice * (1 + changePercent / 100)).toFixed(4)),
-      estimatedChangePercent: parseFloat(changePercent.toFixed(2)),
-      dataSources: ['fallback_simulation']
-    }
-  })
+  return ACCURATE_FUNDS.map(fundInfo => generateMockFund(fundInfo.code, fundInfo.name))
 }
 
 /**
