@@ -4,6 +4,7 @@
  */
 
 import axios from 'axios'
+import { getStockApiHeaders } from '../utils/httpHeaders'
 
 // 代理服务器配置
 const PROXY_BASE_URL = import.meta.env.VITE_PROXY_URL || 'http://localhost:3001'
@@ -62,17 +63,6 @@ const FREE_STOCK_APIS = {
   }
 }
 
-// 请求头配置
-const REQUEST_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-  'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-  'Accept-Encoding': 'gzip, deflate',
-  'Connection': 'keep-alive',
-  'Cache-Control': 'no-cache',
-  'Pragma': 'no-cache'
-}
-
 /**
  * 尝试多个免费API获取股票数据
  */
@@ -120,10 +110,7 @@ async function fetchFromTencent(symbols: string[]): Promise<StockData[]> {
     
     const response = await axios.get(url, {
       timeout: 8000,
-      headers: {
-        ...REQUEST_HEADERS,
-        'Referer': 'http://qt.gtimg.cn/'
-      },
+      headers: getStockApiHeaders(),
       responseType: 'text'
     })
     
