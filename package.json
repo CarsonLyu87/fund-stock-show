@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "./build-wrapper.sh",
+    "build:direct": "vite build",
     "preview": "vite preview",
     "proxy": "node proxy-server.js",
     "dev:full": "concurrently \"npm run dev\" \"npm run proxy\""
