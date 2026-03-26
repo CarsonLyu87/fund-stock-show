@@ -119,6 +119,11 @@ async function fetchStockRealTimeData(symbols: string[]): Promise<StockRealTimeD
     // 使用免费多源API服务
     const stockData = await fetchStockDataMultiSource(symbols)
     
+    console.log(`📈 fetchStockDataMultiSource 返回 ${stockData.length} 条数据`)
+    if (stockData.length > 0) {
+      console.log(`📈 第一条数据: ${stockData[0].symbol} - ${stockData[0].name} - 涨跌幅: ${stockData[0].changePercent}%`)
+    }
+    
     // 转换为内部格式
     return stockData.map(stock => ({
       symbol: stock.symbol,
@@ -225,9 +230,15 @@ export async function calculateFundValuationByPortfolio(
       return null
     }
     
+    console.log(`基金 ${fundCode} 持仓股票:`, portfolio.map(p => `${p.stockCode}(${p.stockName})`))
+    
     // 2. 获取持仓股票的实时数据
     const stockSymbols = portfolio.map(p => p.stockCode)
+    console.log(`请求股票数据，代码: ${stockSymbols.join(',')}`)
+    
     const stockData = await fetchStockRealTimeData(stockSymbols)
+    
+    console.log(`获取到 ${stockData.length} 只股票数据:`, stockData.map(s => `${s.symbol}(${s.name})`))
     
     if (stockData.length === 0) {
       console.warn(`无法获取持仓股票实时数据`)

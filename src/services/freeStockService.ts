@@ -86,7 +86,10 @@ export async function fetchStockDataMultiSource(symbols: string[]): Promise<Stoc
       
       if (stocks.length > 0) {
         console.log(`✅ ${attempt.name} 成功获取 ${stocks.length} 只股票数据`)
+        console.log(`✅ 示例数据: ${stocks[0].symbol} - ${stocks[0].name} - ${stocks[0].currentPrice}`)
         return stocks
+      } else {
+        console.log(`⚠️ ${attempt.name} 返回空数据`)
       }
     } catch (error) {
       console.warn(`⚠️ ${attempt.name} 失败:`, error.message)
