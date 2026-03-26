@@ -78,16 +78,73 @@ class AccurateFundCache {
 const fundCache = new AccurateFundCache()
 
 /**
- * 从东方财富API解析基金净值数据
+ * 使用CORS代理获取数据
+ */
+async function fetchWithCorsProxy(url: string, options: any = {}): Promise<any> {
+  const corsProxies = [
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    `https://corsproxy.io/?${encodeURIComponent(url)}`,
+    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
+  ]
+  
+  for (let i = 0; i < corsProxies.length; i++) {
+    try {
+      console.log(`尝试CORS代理 ${i + 1}: ${corsProxies[i].substring(0, 60)}...`)
+      
+      const response = await axios.get(corsProxies[i], {
+        timeout: 10000,
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache',
+          ...options.headers
+        },
+        ...options
+      })
+      
+      console.log(`✅ CORS代理 ${i + 1} 成功`)
+      return response.data
+    } catch (error) {
+      console.warn(`CORS代理 ${i + 1} 失败: ${error.message}`)
+      if (i === corsProxies.length - 1) throw error
+    }
+  }
+  
+  throw new Error('所有CORS代理都失败')
+}
+
+/**
+ * 从东方财富API解析基金净值数据（支持CORS代理）
  */
 async function parseEastmoneyNetValue(code: string, name: string): Promise<Fund | null> {
   try {
-    const response = await axios.get(FUND_DATA_SOURCES.eastmoneyNetValue(code), {
-      timeout: 8000,
-      headers: getFundApiHeaders()
-    })
+    const url = FUND_DATA_SOURCES.eastmoneyNetValue(code)
+    console.log(`获取基金 ${code} 净值数据: ${url}`)
+    
+    let data: any
+    
+    // 首先尝试直接请求
+    try {
+      const response = await axios.get(url, {
+        timeout: 8000,
+        headers: getFundApiHeaders()
+      })
+      data = response.data
+      console.log(`✅ 直接请求成功`)
+    } catch (directError) {
+      console.warn(`直接请求失败（可能是CORS）: ${directError.message}`)
+      
+      // 使用CORS代理
+      try {
+        data = await fetchWithCorsProxy(url, {
+          headers: getFundApiHeaders()
+        })
+        console.log(`✅ CORS代理请求成功`)
+      } catch (proxyError) {
+        console.error(`CORS代理也失败: ${proxyError.message}`)
+        return null
+      }
+    }
 
-    const data = response.data
     if (data.ErrCode !== 0 || !data.Data || !data.Data.LSJZList || data.Data.LSJZList.length === 0) {
       console.warn(`基金 ${code} 无净值数据`)
       return null
@@ -126,22 +183,69 @@ async function parseEastmoneyNetValue(code: string, name: string): Promise<Fund 
 }
 
 /**
- * 从天天基金API获取实时估值
+ * 从天天基金API获取实时估值（使用JSONP，无CORS问题）
  */
 async function getFundEstimate(code: string): Promise<{ estimatedValue: number; estimatedChangePercent: number } | null> {
   try {
-    const response = await axios.get(FUND_DATA_SOURCES.tiantianEstimate(code), {
-      timeout: 5000,
-      headers: getFundApiHeaders()
-    })
-
-    const jsonStr = response.data.replace(/^jsonpgz\(/, '').replace(/\);$/, '')
-    const data = JSON.parse(jsonStr)
-
-    return {
-      estimatedValue: parseFloat(data.gsz),
-      estimatedChangePercent: parseFloat(data.gszzl)
+    const url = FUND_DATA_SOURCES.tiantianEstimate(code)
+    console.log(`获取基金 ${code} 实时估值: ${url}`)
+    
+    // 方法1: 尝试JSONP方式（无CORS）
+    try {
+      // 导入JSONP函数
+      const { createTiantianJsonpPromise } = await import('./fundSearchService')
+      
+      const jsonpData = await createTiantianJsonpPromise<any>(url)
+      
+      if (jsonpData && jsonpData.fundcode === code) {
+        return {
+          estimatedValue: parseFloat(jsonpData.gsz),
+          estimatedChangePercent: parseFloat(jsonpData.gszzl)
+        }
+      }
+    } catch (jsonpError) {
+      console.warn(`JSONP方式失败: ${jsonpError.message}`)
     }
+    
+    // 方法2: 尝试直接请求（可能有CORS）
+    try {
+      const response = await axios.get(url, {
+        timeout: 5000,
+        headers: getFundApiHeaders()
+      })
+
+      const jsonStr = response.data.replace(/^jsonpgz\(/, '').replace(/\);$/, '')
+      const data = JSON.parse(jsonStr)
+
+      return {
+        estimatedValue: parseFloat(data.gsz),
+        estimatedChangePercent: parseFloat(data.gszzl)
+      }
+    } catch (directError) {
+      console.warn(`直接请求失败: ${directError.message}`)
+    }
+    
+    // 方法3: 使用CORS代理
+    try {
+      const data = await fetchWithCorsProxy(url, {
+        headers: getFundApiHeaders()
+      })
+      
+      // 处理JSONP响应
+      const jsonStr = data.replace(/^jsonpgz\(/, '').replace(/\);$/, '')
+      const parsedData = JSON.parse(jsonStr)
+
+      return {
+        estimatedValue: parseFloat(parsedData.gsz),
+        estimatedChangePercent: parseFloat(parsedData.gszzl)
+      }
+    } catch (proxyError) {
+      console.warn(`CORS代理也失败: ${proxyError.message}`)
+    }
+    
+    console.warn(`基金 ${code} 实时估值获取失败`)
+    return null
+    
   } catch (error) {
     console.warn(`获取基金 ${code} 实时估值失败:`, error)
     return null
