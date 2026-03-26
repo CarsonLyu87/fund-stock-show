@@ -8,7 +8,8 @@ import {
   SearchOutlined, PlusOutlined, DeleteOutlined, 
   ReloadOutlined, StarFilled, StarOutlined,
   ArrowUpOutlined, ArrowDownOutlined, EditOutlined,
-  ExportOutlined, ImportOutlined, HistoryOutlined
+  ExportOutlined, ImportOutlined, HistoryOutlined,
+  LineChartOutlined
 } from '@ant-design/icons'
 import type { Fund } from '../types/index'
 import type { FundSearchResult, UserFundConfig } from '../services/fundSearchService'
@@ -18,6 +19,7 @@ import {
   exportUserFunds, importUserFunds, updateFundNote, getFundNote
 } from '../services/fundSearchService'
 import { fetchFundData } from '../utils/api'
+import FundDetail from './FundDetail/FundDetail'
 
 const { Text } = Typography
 const { Search } = Input
@@ -45,6 +47,10 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload, o
   const [noteText, setNoteText] = useState('')
   const [noteLoading, setNoteLoading] = useState(false)
   const [lastUpdate, setLastUpdate] = useState<string>('--:--:--')
+  
+  // 基金详情相关状态
+  const [detailModalVisible, setDetailModalVisible] = useState(false)
+  const [selectedFund, setSelectedFund] = useState<{ code: string; name: string } | null>(null)
 
   // 初始化
   useEffect(() => {
@@ -424,12 +430,27 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload, o
     {
       title: '操作',
       key: 'action',
-      width: 120,
+      width: 160,
       render: (_: any, record: Fund) => {
         const isAdded = userFunds.some(fund => fund.code === record.code)
         
         return (
           <Space>
+            <Tooltip title="查看估值详情">
+              <Button
+                type="text"
+                icon={<LineChartOutlined />}
+                size="small"
+                onClick={() => {
+                  console.log('查看基金详情:', record.code, record.name)
+                  setSelectedFund({ code: record.code, name: record.name })
+                  setDetailModalVisible(true)
+                }}
+              >
+                详情
+              </Button>
+            </Tooltip>
+            
             <Tooltip title={isAdded ? "从关注列表移除" : "添加到关注列表"}>
               <Button
                 type={isAdded ? "primary" : "default"}
@@ -930,6 +951,25 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload, o
         <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
           提示：备注仅保存在本地浏览器中
         </div>
+      </Modal>
+
+      {/* 基金详情模态框 */}
+      <Modal
+        title="基金估值详情"
+        open={detailModalVisible}
+        onCancel={() => setDetailModalVisible(false)}
+        footer={null}
+        width="90%"
+        style={{ maxWidth: 1200 }}
+        destroyOnClose
+      >
+        {selectedFund && (
+          <FundDetail
+            fundCode={selectedFund.code}
+            fundName={selectedFund.name}
+            onClose={() => setDetailModalVisible(false)}
+          />
+        )}
       </Modal>
     </Card>
   )
