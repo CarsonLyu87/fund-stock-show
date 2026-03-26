@@ -66,13 +66,25 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload, o
   // 加载基金数据
   const loadFundData = async () => {
     console.log('🔄 UnifiedFundManager: 开始加载基金数据...')
+    console.log('📋 当前用户基金配置:', userFunds.map(f => f.code).join(', '))
     setFundsLoading(true)
     try {
       const data = await fetchFundData()
       console.log(`✅ UnifiedFundManager: 加载完成，获取 ${data.length} 只基金数据`)
-      console.log('📊 基金列表:', data.map(f => `${f.code}: ${f.name}`))
+      console.log('📊 基金列表:', data.map(f => `${f.code}: ${f.name} (${f.changePercent}%)`))
       setFunds(data)
       setLastUpdate(new Date().toLocaleTimeString('zh-CN'))
+      
+      // 检查是否所有用户基金都在数据中
+      const userFundCodes = userFunds.map(f => f.code)
+      const loadedFundCodes = data.map(f => f.code)
+      const missingFunds = userFundCodes.filter(code => !loadedFundCodes.includes(code))
+      
+      if (missingFunds.length > 0) {
+        console.warn(`⚠️ 以下用户基金未在数据中找到: ${missingFunds.join(', ')}`)
+      } else {
+        console.log('✅ 所有用户基金都在数据中')
+      }
     } catch (error) {
       message.error('加载基金数据失败')
       console.error('❌ UnifiedFundManager: 加载基金数据失败:', error)
@@ -116,12 +128,22 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload, o
   // 处理添加基金
   const handleAddFund = (fund: FundSearchResult) => {
     console.log('🔍 开始添加基金:', fund.code, fund.name)
+    console.log('📝 调用 addFundToUserList...')
     const success = addFundToUserList(fund)
     
     if (success) {
       console.log('✅ 添加基金成功:', fund.code)
+      console.log('🔄 更新用户基金列表状态...')
       message.success(`已添加基金: ${fund.name}`)
-      loadUserFunds()
+      
+      // 立即更新用户基金列表
+      const updatedUserFunds = getUserFunds()
+      console.log(`📋 更新后用户基金列表: ${updatedUserFunds.length} 只基金`)
+      updatedUserFunds.forEach(f => console.log(`   - ${f.code}: ${f.name}`))
+      
+      setUserFunds(updatedUserFunds)
+      
+      // 更新搜索结果状态
       setSearchResults(prev => 
         prev.map(item => 
           item.code === fund.code ? { ...item, isAdded: true } : item
@@ -129,6 +151,7 @@ const UnifiedFundManager: React.FC<UnifiedFundManagerProps> = ({ onDataReload, o
       )
       
       // 触发基金更新回调
+      console.log('📢 触发 onFundsUpdated 回调...')
       onFundsUpdated?.()
       
       // 重新加载基金数据
