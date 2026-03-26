@@ -6,6 +6,7 @@
 import axios from 'axios'
 import type { Fund, StockData } from '../types'
 import { defaultConfig } from '../config/dataSources'
+import { getFundApiHeaders, getStockApiHeaders } from '../utils/httpHeaders'
 
 // 本地缓存接口
 interface CacheItem<T> {
@@ -182,10 +183,7 @@ export async function fetchRealFundData(): Promise<Fund[]> {
       try {
         const response = await axios.get(REAL_FUND_APIS.tiantian(code), {
           timeout: 5000,
-          headers: {
-            'Referer': 'https://fund.eastmoney.com/',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-          }
+          headers: getFundApiHeaders()
         })
         
         const fundData = parseTiantianFundResponse(response.data)
@@ -243,10 +241,7 @@ export async function fetchRealStockData(): Promise<StockData[]> {
       try {
         const response = await axios.get(REAL_STOCK_APIS.sina(symbol), {
           timeout: 5000,
-          headers: {
-            'Referer': 'https://finance.sina.com.cn/',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-          }
+          headers: getStockApiHeaders()
         })
         
         const stockData = parseSinaStockResponse(response.data, symbol)

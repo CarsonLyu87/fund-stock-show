@@ -5,6 +5,7 @@
 
 import axios from 'axios'
 import type { Fund } from '../types'
+import { getFundApiHeaders } from '../utils/httpHeaders'
 
 // 基金数据源配置
 const FUND_DATA_SOURCES = {
@@ -23,15 +24,6 @@ const FUND_DATA_SOURCES = {
   // 基金基本信息API
   fundBasicInfo: (code: string) =>
     `https://api.fund.eastmoney.com/f10/lsjz?fundCode=${code}&pageIndex=1&pageSize=1`,
-}
-
-// 请求头配置（避免被屏蔽）
-const REQUEST_HEADERS = {
-  'Referer': 'https://fund.eastmoney.com/',
-  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Accept': 'application/json, text/plain, */*',
-  'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-  'Connection': 'keep-alive',
 }
 
 // 支持的基金列表（常用基金）
@@ -92,7 +84,7 @@ async function parseEastmoneyNetValue(code: string, name: string): Promise<Fund 
   try {
     const response = await axios.get(FUND_DATA_SOURCES.eastmoneyNetValue(code), {
       timeout: 8000,
-      headers: REQUEST_HEADERS
+      headers: getFundApiHeaders()
     })
 
     const data = response.data
@@ -140,10 +132,7 @@ async function getFundEstimate(code: string): Promise<{ estimatedValue: number; 
   try {
     const response = await axios.get(FUND_DATA_SOURCES.tiantianEstimate(code), {
       timeout: 5000,
-      headers: {
-        'Referer': 'https://fund.eastmoney.com/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
+      headers: getFundApiHeaders()
     })
 
     const jsonStr = response.data.replace(/^jsonpgz\(/, '').replace(/\);$/, '')

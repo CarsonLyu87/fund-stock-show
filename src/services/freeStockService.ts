@@ -171,10 +171,7 @@ async function fetchFromEastmoney(symbols: string[]): Promise<StockData[]> {
     
     const response = await axios.get(url, {
       timeout: 8000,
-      headers: {
-        ...REQUEST_HEADERS,
-        'Referer': 'https://quote.eastmoney.com/'
-      }
+      headers: getStockApiHeaders()
     })
     
     return parseEastmoneyStockData(response.data, symbols)

@@ -4,6 +4,7 @@
  */
 
 import axios from 'axios'
+import { getFundApiHeaders } from '../utils/httpHeaders'
 
 // 代理服务器配置
 const PROXY_BASE_URL = import.meta.env.VITE_PROXY_URL || 'http://localhost:3001'
@@ -459,10 +460,7 @@ async function fetchFundDetailFromTiantian(code: string): Promise<FundSearchResu
       // Node.js环境中使用axios
       const response = await axios.get(url, {
         timeout: 5000,
-        headers: {
-          'Referer': 'https://fund.eastmoney.com/',
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-        },
+        headers: getFundApiHeaders(),
         responseType: 'text'
       })
       
@@ -546,10 +544,7 @@ async function fetchFundDetailFromPublicApi(code: string): Promise<FundSearchRes
           // 普通HTTP请求
           const response = await axios.get(apiUrl, {
             timeout: 3000,
-            headers: {
-              'Referer': 'https://fund.eastmoney.com/',
-              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-            }
+            headers: getFundApiHeaders()
           })
           
           if (response.data) {
@@ -595,10 +590,7 @@ async function fetchFundDetailFromEastmoney(code: string): Promise<FundSearchRes
     
     const response = await axios.get(url, {
       timeout: 5000,
-      headers: {
-        'Referer': 'https://fund.eastmoney.com/',
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-      }
+      headers: getFundApiHeaders()
     })
     
     if (response.data && response.data.ErrCode === 0 && response.data.Data) {
@@ -608,10 +600,7 @@ async function fetchFundDetailFromEastmoney(code: string): Promise<FundSearchRes
         const infoUrl = `https://fund.eastmoney.com/pingzhongdata/${code}.js?v=${Date.now()}`
         const infoResponse = await axios.get(infoUrl, {
           timeout: 3000,
-          headers: {
-            'Referer': 'https://fund.eastmoney.com/',
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-          },
+          headers: getFundApiHeaders(),
           responseType: 'text'
         })
         

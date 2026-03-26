@@ -5,6 +5,7 @@
 
 import axios from 'axios'
 import { fetchStockDataMultiSource, getFundPortfolioStocks } from './freeStockService'
+import { getFundApiHeaders } from '../utils/httpHeaders'
 
 // 基金持仓数据接口
 const FUND_PORTFOLIO_API = {
@@ -410,10 +411,7 @@ async function getApiEstimate(fundCode: string): Promise<{ value: number; change
       `https://fundgz.1234567.com.cn/js/${fundCode}.js?rt=${Date.now()}`,
       {
         timeout: 5000,
-        headers: {
-          'Referer': 'https://fund.eastmoney.com/',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
+        headers: getFundApiHeaders()
       }
     )
     
