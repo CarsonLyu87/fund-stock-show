@@ -30,22 +30,7 @@ const FUND_PORTFOLIO_API = {
   }
 }
 
-// 请求头配置
-// 注意：在浏览器环境中，某些头（如User-Agent、Connection）会被浏览器拒绝设置
-const isBrowser = typeof window !== 'undefined'
 
-const REQUEST_HEADERS = isBrowser ? {
-  // 浏览器环境中只设置安全的头
-  'Accept': 'application/json, text/plain, */*',
-  'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-} : {
-  // Node.js环境中可以设置所有头
-  'Referer': 'https://fund.eastmoney.com/',
-  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Accept': 'application/json, text/plain, */*',
-  'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-  'Connection': 'keep-alive',
-}
 
 // 基金持仓样本数据（实际应从API获取）
 const FUND_PORTFOLIO_SAMPLES: Record<string, Array<{
