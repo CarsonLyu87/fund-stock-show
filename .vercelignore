@@ -1,3 +1,8 @@
+# 忽略所有JavaScript文件（防止Vercel误认为是函数）
+*.js
+*.mjs
+*.cjs
+
 # 忽略开发服务器文件
 proxy-server.js
 
@@ -37,3 +42,10 @@ coverage/
 # 忽略文档文件
 docs/
 *.md
+
+# 忽略TypeScript文件
+*.ts
+*.tsx
+
+# 忽略API目录（如果有）
+api/
